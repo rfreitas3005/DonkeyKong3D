@@ -16,6 +16,7 @@ export class Game {
         this.score = 0;
         this.scoreElement = document.getElementById('score');
         this.isRunning = false;
+        this.isPaused = false;
         this.stats = null;
 
         // Initialize menu first
@@ -91,14 +92,29 @@ export class Game {
 
     pause() {
         this.isRunning = false;
+        this.isPaused = true;
+        if (this.player) {
+            this.player.enabled = false;
+        }
+        // Stop the clock to prevent time accumulation while paused
+        this.clock.stop();
     }
 
     resume() {
+        this.isPaused = false;
         this.isRunning = true;
+        if (this.player) {
+            this.player.enabled = true;
+        }
+        // Restart the clock
+        this.clock.start();
         this.animate();
     }
 
     animate() {
+        // Don't continue animation if game is paused
+        if (this.isPaused) return;
+        
         if (!this.isRunning) return;
 
         requestAnimationFrame(() => this.animate());
@@ -108,7 +124,9 @@ export class Game {
         const deltaTime = this.clock.getDelta();
         
         // Update game components
-        this.player.update(deltaTime);
+        if (this.player && this.player.enabled) {
+            this.player.update(deltaTime);
+        }
         this.level.update(deltaTime);
         if (this.debugMenu) this.debugMenu.update();
 

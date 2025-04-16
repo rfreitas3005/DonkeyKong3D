@@ -14,15 +14,18 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: 9999;
+    transition: opacity 0.3s ease;
 }
 
 .menu-content {
-    background-color: rgba(0, 0, 0, 0.8);
+    background-color: rgba(0, 0, 0, 0.9);
     padding: 2rem;
     border: 4px solid #ff6b6b;
     box-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
     min-width: 300px;
+    position: relative;
+    z-index: 10000;
 }
 
 .game-title {
@@ -142,4 +145,30 @@ input[type="range"]::-webkit-slider-thumb {
 
 .menu-back-button:hover {
     color: #ff6b6b;
+}
+
+/* Pause menu specific styles */
+.menu-container[data-menu="pause"] {
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    opacity: 1 !important;
+    display: flex !important;
+}
+
+.menu-container[data-menu="pause"] .menu-content {
+    transform: scale(0.9);
+    animation: pauseMenuIn 0.3s ease forwards;
+    opacity: 1;
+}
+
+@keyframes pauseMenuIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
 } 

@@ -9,6 +9,7 @@ A 3D version of the classic Donkey Kong game built with Three.js.
 - Player movement in all directions
 - Jumping mechanics
 - Score tracking
+- Pause menu system
 
 ## Controls
 
@@ -17,6 +18,7 @@ A 3D version of the classic Donkey Kong game built with Three.js.
 - A / Arrow Left: Move left
 - D / Arrow Right: Move right
 - Space: Jump
+- P: Pause/Resume game
 
 ## Installation
 
@@ -41,6 +43,7 @@ The game will be available at `http://localhost:5173`
 - Avoid the rolling barrels
 - Try to reach the top platform
 - Your score increases as you progress
+- Press P to pause the game at any time
 
 ## Development
 

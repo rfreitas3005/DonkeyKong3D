@@ -1,7 +1,7 @@
 export class GameMenu {
     constructor(game) {
         this.game = game;
-        this.currentMenu = 'main'; // 'main' or 'options'
+        this.currentMenu = 'main'; // 'main', 'options', or 'pause'
         this.selectedIndex = 0;
         this.options = {
             sensitivity: 0.002,
@@ -11,23 +11,29 @@ export class GameMenu {
         
         this.createMenuElements();
         this.setupEventListeners();
+        this.isPaused = false;
     }
 
     createMenuElements() {
         // Create menu container
         this.menuContainer = document.createElement('div');
         this.menuContainer.className = 'menu-container';
-
+        this.menuContainer.style.zIndex = '1000';  // Ensure it's above the game
+        
         // Add scanline effect
         const scanline = document.createElement('div');
         scanline.className = 'scanline';
         document.body.appendChild(scanline);
 
+        // Keep a reference to the container in the DOM
+        document.body.appendChild(this.menuContainer);
         this.showMainMenu();
     }
 
     showMainMenu() {
         this.currentMenu = 'main';
+        this.menuContainer.setAttribute('data-menu', 'main');
+        this.menuContainer.style.display = 'flex';
         this.menuContainer.innerHTML = `
             <div class="menu-content">
                 <h1 class="game-title">DONKEY KONG 3D</h1>
@@ -36,7 +42,6 @@ export class GameMenu {
                 <div class="menu-item" data-action="exit">EXIT</div>
             </div>
         `;
-        document.body.appendChild(this.menuContainer);
         this.updateSelectedItem();
     }
 
@@ -123,17 +128,30 @@ export class GameMenu {
 
     setupEventListeners() {
         document.addEventListener('keydown', (e) => {
-            if (this.currentMenu === 'main') {
+            if (e.key.toLowerCase() === 'p') {
+                e.preventDefault(); // Prevent any default 'p' key behavior
+                if (!this.game.isPaused && this.game.isRunning) {
+                    this.showPauseMenu();
+                } else if (this.currentMenu === 'pause' && this.game.isPaused) {
+                    this.resumeGame();
+                }
+            }
+            
+            if (this.currentMenu === 'main' || this.currentMenu === 'pause') {
                 switch (e.key) {
                     case 'ArrowUp':
+                        e.preventDefault();
                         this.selectedIndex = Math.max(0, this.selectedIndex - 1);
                         this.updateSelectedItem();
                         break;
                     case 'ArrowDown':
-                        this.selectedIndex = Math.min(2, this.selectedIndex + 1);
+                        e.preventDefault();
+                        const maxIndex = this.currentMenu === 'pause' ? 2 : 2;
+                        this.selectedIndex = Math.min(maxIndex, this.selectedIndex + 1);
                         this.updateSelectedItem();
                         break;
                     case 'Enter':
+                        e.preventDefault();
                         this.handleMenuAction();
                         break;
                 }
@@ -174,13 +192,48 @@ export class GameMenu {
                 window.close();
                 // For web-based version, you might want to show a confirmation dialog
                 break;
+            case 'resume':
+                this.resumeGame();
+                break;
+            case 'main-menu':
+                window.location.reload();
+                break;
         }
+    }
+
+    showPauseMenu() {
+        if (this.game.isPaused) return; // Prevent multiple pause menus
+        
+        this.currentMenu = 'pause';
+        this.selectedIndex = 0;
+        this.menuContainer.setAttribute('data-menu', 'pause');
+        this.menuContainer.style.display = 'flex';
+        this.menuContainer.style.opacity = '1';  // Ensure menu is visible
+        this.menuContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';  // Semi-transparent background
+        this.menuContainer.innerHTML = `
+            <div class="menu-content">
+                <h1 class="game-title">PAUSED</h1>
+                <div class="menu-item" data-action="resume">RESUME</div>
+                <div class="menu-item" data-action="main-menu">RETURN TO MENU</div>
+                <div class="menu-item" data-action="exit">EXIT</div>
+            </div>
+        `;
+        
+        this.updateSelectedItem();
+        this.game.pause();
+    }
+
+    resumeGame() {
+        if (!this.game.isPaused) return; // Only resume if actually paused
+        
+        this.menuContainer.style.display = 'none';
+        this.game.resume();
     }
 
     startGame() {
         this.menuContainer.classList.add('fade-out');
         setTimeout(() => {
-            this.menuContainer.remove();
+            this.menuContainer.style.display = 'none';
             this.game.start();
         }, 500);
     }
