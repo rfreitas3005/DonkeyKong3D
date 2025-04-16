@@ -22,6 +22,17 @@ export class Game {
         // Initialize menu first
         this.menu = new GameMenu(this);
         this.createCountdownElement();
+
+        // Add pause key listener
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'p' && this.isRunning) {
+                if (this.isPaused) {
+                    this.resume();
+                } else {
+                    this.pause();
+                }
+            }
+        });
     }
 
     createCountdownElement() {
@@ -180,33 +191,133 @@ export class Game {
     }
 
     start() {
+        console.log('Starting game...');
         if (!this.scene) {
             this.init();
+        } else {
+            // Reset and recreate level and player
+            this.level = new Level(this.scene);
+            this.player = new Player(this.scene, this.camera);
         }
         this.startCountdown();
     }
 
     pause() {
+        if (!this.isRunning || this.isPaused) return;
+        
+        // Show pause menu first before stopping the game
+        this.menu.showPauseMenu();
+        
         this.isRunning = false;
         this.isPaused = true;
+        
         if (this.player) {
             this.player.enabled = false;
-            this.player.disableControls(); // Disable pointer lock
+            this.player.disableControls();
         }
+        
+        if (this.level) {
+            this.level.pauseBarrels();
+        }
+        
         this.lastTimeStamp = this.clock.getElapsedTime();
         this.clock.stop();
     }
 
     resume() {
-        this.isPaused = false;
+        if (!this.isPaused) return;
+        
+        // Hide pause menu first
+        this.menu.hidePauseMenu();
+        
         this.isRunning = true;
+        this.isPaused = false;
+        
         if (this.player) {
             this.player.enabled = true;
-            this.player.enableControls(); // Re-enable pointer lock
+            this.player.enableControls();
         }
+        
+        if (this.level) {
+            this.level.resumeBarrels();
+        }
+        
         this.clock.start();
-        this.clock.elapsedTime = this.lastTimeStamp;
-        this.animate();
+    }
+
+    returnToMainMenu() {
+        console.log('Returning to main menu...');
+        
+        // First hide the pause menu
+        this.menu.hidePauseMenu();
+        
+        // Reset game state
+        this.isPaused = false;
+        this.isRunning = false;
+        
+        // Stop and reset the clock
+        this.clock.stop();
+        this.lastTimeStamp = 0;
+        
+        // Clear the scene except for essential elements
+        if (this.scene) {
+            // Store essential objects
+            const essentialObjects = [];
+            this.scene.traverse((object) => {
+                if (object.userData.isEssential) {
+                    essentialObjects.push(object);
+                }
+            });
+            
+            // Clear the scene
+            while(this.scene.children.length > 0) { 
+                this.scene.remove(this.scene.children[0]); 
+            }
+            
+            // Re-add essential objects
+            essentialObjects.forEach(obj => this.scene.add(obj));
+        }
+        
+        // Reset and recreate level
+        if (this.level) {
+            this.level = new Level(this.scene);
+        }
+        
+        // Reset and recreate player
+        if (this.player) {
+            this.player.enabled = false;
+            this.player.disableControls();
+            this.player = new Player(this.scene, this.camera);
+        }
+        
+        // Reset camera
+        if (this.camera) {
+            this.camera.position.set(0, 5, 10);
+            this.camera.lookAt(0, 0, 0);
+        }
+        
+        // Reset renderer if needed
+        if (this.renderer) {
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Show the main menu
+        console.log('Showing main menu...');
+        this.menu.showMenu();
+        
+        // Ensure the scene background is black
+        if (this.scene) {
+            this.scene.background = new THREE.Color(0x000000);
+        }
+
+        // Force a re-render
+        if (this.renderer && this.scene && this.camera) {
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    exitGame() {
+        window.close();
     }
 
     animate() {
@@ -216,19 +327,22 @@ export class Game {
 
         if (this.stats) this.stats.begin();
 
-        const deltaTime = this.clock.getDelta();
-        
-        // Update game components
-        if (this.player && this.player.enabled) {
-            this.player.update(deltaTime);
-        }
-        if (this.level) {
-            this.level.update(deltaTime);
-        }
-        if (this.debugMenu) this.debugMenu.update();
+        // Only update game if not paused
+        if (!this.isPaused) {
+            const deltaTime = this.clock.getDelta();
+            
+            // Update game components
+            if (this.player && this.player.enabled) {
+                this.player.update(deltaTime);
+            }
+            if (this.level) {
+                this.level.update(deltaTime);
+            }
+            if (this.debugMenu) this.debugMenu.update();
 
-        // Render scene
-        this.renderer.render(this.scene, this.camera);
+            // Render scene
+            this.renderer.render(this.scene, this.camera);
+        }
 
         if (this.stats) this.stats.end();
     }
