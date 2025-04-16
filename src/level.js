@@ -18,6 +18,7 @@ export class Level {
         this.gameStarted = false;
         this.onGameStarted = null;
         this.gravity = 9.8; // Assuming a default gravity value
+        this.donkeyKongAnimationTime = 0;
 
         // Define ladder positions as a class property
         this.ladderPositions = [
@@ -357,12 +358,96 @@ export class Level {
         this.throwAnimationTime = 0;
     }
 
+    createPlatform(x, y, z, width, height, depth, color = 0x808080) {
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.7,
+            metalness: 0.1
+        });
+        const platform = new THREE.Mesh(geometry, material);
+        platform.position.set(x, y, z);
+        platform.castShadow = true;
+        platform.receiveShadow = true;
+        platform.userData.isPlatform = true;
+        this.scene.add(platform);
+        return platform;
+    }
+
+    createBoundary(x, y, z, width, height, depth) {
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.0,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const boundary = new THREE.Mesh(geometry, material);
+        boundary.position.set(x, y, z);
+        boundary.userData.isBoundary = true;
+        this.scene.add(boundary);
+        return boundary;
+    }
+
+    createLadder(x, y, z, width, height, depth, floorIndex) {
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x8b4513,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+        const ladder = new THREE.Mesh(geometry, material);
+        ladder.position.set(x, y, z);
+        ladder.userData.isLadder = true;
+        ladder.userData.floorIndex = floorIndex;
+        this.scene.add(ladder);
+        return ladder;
+    }
+
+    createBarrel() {
+        const geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.6, 12);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x8b4513,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const barrel = new THREE.Mesh(geometry, material);
+        
+        // Posicionar o barril no topo do nível
+        barrel.position.set(0, this.floorHeight * (this.numFloors - 1) + 1, 0);
+        barrel.rotation.x = Math.PI / 2; // Deitar o barril de lado
+        
+        barrel.userData.isBarrel = true;
+        barrel.userData.velocity = new THREE.Vector3();
+        
+        this.scene.add(barrel);
+        this.barrels.push(barrel);
+        
+        return barrel;
+    }
+
+    createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
+        const geometry = new THREE.BoxGeometry(width, height, depth);
+        const material = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.75,
+            metalness: 0.25
+        });
+        const girder = new THREE.Mesh(geometry, material);
+        girder.position.set(x, y, z);
+        girder.castShadow = true;
+        girder.receiveShadow = true;
+        this.scene.add(girder);
+        return girder;
+    }
+
     spawnBarrel() {
         // Create the barrel with a single cylinder with more segments for smoothness
         const segments = 32;
         const radiusTop = 1.4;
         const radiusBottom = 1.4;
-        const height = 2.4;
+        const height = 4.8;  // Increased from 2.4
         const heightSegments = 16;
         
         const geometry = new THREE.CylinderGeometry(
@@ -375,7 +460,7 @@ export class Level {
         );
 
         // Bulge out the middle vertices with smoother transition
-        const middleRadius = 1.7;
+        const middleRadius = 1.9;  // Increased from 1.7
         const positions = geometry.attributes.position.array;
         for (let i = 0; i < positions.length; i += 3) {
             const y = positions[i + 1];
@@ -424,101 +509,105 @@ export class Level {
     update(deltaTime) {
         if (!deltaTime) return;
 
-        // Update barrel spawning
+        // Only spawn and update barrels if game has started
         if (this.gameStarted) {
             this.barrelSpawnTimer += deltaTime;
             if (this.barrelSpawnTimer >= this.barrelSpawnInterval / 1000) {
                 this.spawnBarrel();
                 this.barrelSpawnTimer = 0;
             }
-        }
 
-        // Update existing barrels
-        for (let i = this.barrels.length - 1; i >= 0; i--) {
-            const barrel = this.barrels[i];
-            
-            // Move barrel based on current floor
-            if (barrel.userData.movingToBack) {
-                barrel.position.z += barrel.userData.speed * deltaTime;
-            } else {
-                barrel.position.z -= barrel.userData.speed * deltaTime;
-            }
-
-            // Update rotation based on movement
-            if (barrel.userData.movingToBack) {
-                barrel.rotation.x += barrel.userData.rotationSpeed * deltaTime;
-            } else {
-                barrel.rotation.x -= barrel.userData.rotationSpeed * deltaTime;
-            }
-
-            // Apply gravity
-            const gravity = 40;
-            barrel.userData.verticalSpeed -= gravity * deltaTime;
-            barrel.position.y += barrel.userData.verticalSpeed * deltaTime;
-
-            // Calculate floor height and check for floor collision
-            const currentFloorHeight = barrel.userData.floor * this.floorHeight;
-            const minHeight = currentFloorHeight + 1.7;
-
-            if (barrel.position.y < minHeight) {
-                barrel.position.y = minHeight;
-                barrel.userData.verticalSpeed = 0;
-            }
-
-            // Check if barrel has reached the boundary walls
-            if (barrel.userData.movingToBack && barrel.position.z >= this.floorLength ||
-                !barrel.userData.movingToBack && barrel.position.z <= 0) {
-                
-                // If on the bottom floor (floor 0), remove the barrel
-                if (barrel.userData.floor === 0) {
-                    this.scene.remove(barrel);
+            // Update existing barrels
+            for (let i = this.barrels.length - 1; i >= 0; i--) {
+                const barrel = this.barrels[i];
+                if (!barrel || !barrel.parent) {
                     this.barrels.splice(i, 1);
                     continue;
                 }
                 
-                // Move to next floor down
-                barrel.userData.floor--;
-                
-                // Set position for next floor
-                const isEvenFloor = barrel.userData.floor % 2 === 0;
-                barrel.position.z = isEvenFloor ? 0 : this.floorLength;
-                barrel.userData.movingToBack = isEvenFloor;
-                
-                // Set initial falling velocity and position
-                barrel.userData.verticalSpeed = -5;
-                barrel.position.y = (barrel.userData.floor * this.floorHeight) + 10; // Start higher for a more visible drop
-            }
-        }
-
-        // Animate Donkey Kong
-        if (this.donkeyKong) {
-            if (this.isThrowingBarrel) {
-                // Throwing animation
-                this.throwAnimationTime += 0.1;
-                const throwProgress = Math.min(this.throwAnimationTime, 1);
-                
-                // Raise arms during throw
-                const leftArm = this.donkeyKong.children[2];
-                const rightArm = this.donkeyKong.children[3];
-                
-                leftArm.rotation.x = -Math.PI/2 * throwProgress;
-                rightArm.rotation.x = -Math.PI/2 * throwProgress;
-                
-                if (this.throwAnimationTime >= 1) {
-                    this.isThrowingBarrel = false;
-                    this.throwAnimationTime = 0;
+                // Move barrel based on current floor
+                if (barrel.userData.movingToBack) {
+                    barrel.position.z += barrel.userData.speed * deltaTime;
+                } else {
+                    barrel.position.z -= barrel.userData.speed * deltaTime;
                 }
-            } else {
-                // Idle animation
-                this.donkeyKongAnimationTime += 0.05;
-                const yOffset = Math.sin(this.donkeyKongAnimationTime) * 0.3;
-                this.donkeyKong.position.y = (this.numFloors - 1) * this.floorHeight + 3 + yOffset;
-                
-                // Gentle arm swaying when not throwing
-                const leftArm = this.donkeyKong.children[2];
-                const rightArm = this.donkeyKong.children[3];
-                leftArm.rotation.x = Math.sin(this.donkeyKongAnimationTime) * 0.3;
-                rightArm.rotation.x = Math.sin(this.donkeyKongAnimationTime + Math.PI) * 0.3;
+
+                // Update rotation based on movement
+                if (barrel.userData.movingToBack) {
+                    barrel.rotation.x += barrel.userData.rotationSpeed * deltaTime;
+                } else {
+                    barrel.rotation.x -= barrel.userData.rotationSpeed * deltaTime;
+                }
+
+                // Apply gravity
+                const gravity = 40;
+                barrel.userData.verticalSpeed -= gravity * deltaTime;
+                barrel.position.y += barrel.userData.verticalSpeed * deltaTime;
+
+                // Calculate floor height and check for floor collision
+                const currentFloorHeight = barrel.userData.floor * this.floorHeight;
+                const minHeight = currentFloorHeight + 1.7;
+
+                if (barrel.position.y < minHeight) {
+                    barrel.position.y = minHeight;
+                    barrel.userData.verticalSpeed = 0;
+                }
+
+                // Check if barrel has reached the boundary walls
+                if (barrel.userData.movingToBack && barrel.position.z >= this.floorLength ||
+                    !barrel.userData.movingToBack && barrel.position.z <= 0) {
+                    
+                    // If on the bottom floor (floor 0), remove the barrel
+                    if (barrel.userData.floor === 0) {
+                        this.scene.remove(barrel);
+                        this.barrels.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // Move to next floor down
+                    barrel.userData.floor--;
+                    
+                    // Set position for next floor
+                    const isEvenFloor = barrel.userData.floor % 2 === 0;
+                    barrel.position.z = isEvenFloor ? 0 : this.floorLength;
+                    barrel.userData.movingToBack = isEvenFloor;
+                    
+                    // Set initial falling velocity and position
+                    barrel.userData.verticalSpeed = -5;
+                    barrel.position.y = (barrel.userData.floor * this.floorHeight) + 10; // Start higher for a more visible drop
+                }
+            }
+
+            // Animate Donkey Kong
+            if (this.donkeyKong) {
+                if (this.isThrowingBarrel) {
+                    // Throwing animation
+                    this.throwAnimationTime += 0.1;
+                    const throwProgress = Math.min(this.throwAnimationTime, 1);
+                    
+                    // Raise arms during throw
+                    const leftArm = this.donkeyKong.children[2];
+                    const rightArm = this.donkeyKong.children[3];
+                    
+                    leftArm.rotation.x = -Math.PI/2 * throwProgress;
+                    rightArm.rotation.x = -Math.PI/2 * throwProgress;
+                    
+                    if (this.throwAnimationTime >= 1) {
+                        this.isThrowingBarrel = false;
+                        this.throwAnimationTime = 0;
+                    }
+                } else {
+                    // Idle animation
+                    this.donkeyKongAnimationTime += 0.05;
+                    const yOffset = Math.sin(this.donkeyKongAnimationTime) * 0.3;
+                    this.donkeyKong.position.y = (this.numFloors - 1) * this.floorHeight + 3 + yOffset;
+                    
+                    // Gentle arm swaying when not throwing
+                    const leftArm = this.donkeyKong.children[2];
+                    const rightArm = this.donkeyKong.children[3];
+                    leftArm.rotation.x = Math.sin(this.donkeyKongAnimationTime) * 0.3;
+                    rightArm.rotation.x = Math.sin(this.donkeyKongAnimationTime + Math.PI) * 0.3;
+                }
             }
         }
 
@@ -529,10 +618,20 @@ export class Level {
         }
     }
 
+    clearBarrels() {
+        // Remove any existing barrels from the scene
+        for (let barrel of this.barrels) {
+            if (barrel && barrel.parent) {
+                this.scene.remove(barrel);
+            }
+        }
+        this.barrels = [];
+    }
+
     startBarrels() {
-        console.log('Starting barrels'); // Debug log
+        console.log('Starting barrels');
+        this.clearBarrels(); // Limpa quaisquer barris existentes
         this.gameStarted = true;
         this.barrelSpawnTimer = 0;
-        this.spawnBarrel(); // Spawn first barrel immediately
     }
 } 

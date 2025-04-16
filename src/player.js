@@ -10,12 +10,17 @@ export class Player {
         this.mixer = null;
         this.animations = {};
         this.currentAnimation = null;
-        this.moveSpeed = 0.08;
-        this.climbSpeed = 0.06;
-        this.jumpForce = 0.35;
-        this.gravity = 0.008;
-        this.velocity = new THREE.Vector3();
+        this.idleTimer = 0;
+        this.idleDelay = 10; // 10 seconds delay before main idle animation
         this.isJumping = false;
+        
+        // Reduced movement speeds
+        this.moveSpeed = 0.04;
+        this.climbSpeed = 0.025;
+        this.jumpForce = 0.15;
+        this.gravity = 0.004;
+        
+        this.velocity = new THREE.Vector3();
         this.currentFloor = 0;
         this.floorHeight = 16;
         this.onLadder = false;
@@ -35,23 +40,23 @@ export class Player {
     }
 
     async init() {
-        // Only create temporary mesh if we haven't loaded the model yet
-        if (!this.isLoaded) {
-            const geometry = new THREE.BoxGeometry(0.6, 1.5, 0.4); // Match collision size
-            const material = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-            this.tempMesh = new THREE.Mesh(geometry, material);
-            
-            // Start at the beginning of the path
-            this.tempMesh.position.set(0, 1.25, this.floorLength * 0.95);
-            this.scene.add(this.tempMesh);
-            this.mesh = this.tempMesh;
+        // Create a temporary simple box as placeholder while model loads
+        const tempGeometry = new THREE.BoxGeometry(0.6, 1.8, 0.3);
+        const tempMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x00ff00,
+            transparent: true,
+            opacity: 0
+        });
+        this.tempMesh = new THREE.Mesh(tempGeometry, tempMaterial);
+        this.tempMesh.position.set(0, 1.25, this.floorLength * 0.95);
+        this.scene.add(this.tempMesh);
+        this.mesh = this.tempMesh;
 
-            // Create collision box
-            this.collider = new THREE.Box3();
+        // Create collision box
+        this.collider = new THREE.Box3();
 
-            // Load character model
-            await this.loadCharacterModel();
-        }
+        // Load the actual character model
+        await this.loadCharacterModel();
     }
 
     async loadCharacterModel() {
@@ -60,10 +65,11 @@ export class Player {
         const loader = new FBXLoader();
         
         try {
-            const model = await loader.loadAsync('/models/character.fbx');
+            // Load the base character model first
+            const model = await loader.loadAsync('./models/skin.fbx');
             
             // Configure the model
-            model.scale.setScalar(0.01);
+            model.scale.setScalar(0.013);
             model.position.copy(this.tempMesh.position);
             model.rotation.copy(this.tempMesh.rotation);
             
@@ -80,32 +86,83 @@ export class Player {
             this.scene.add(this.mesh);
             this.isLoaded = true;
 
-            // Setup animations
-            if (model.animations && model.animations.length) {
-                this.mixer = new THREE.AnimationMixer(model);
-                model.animations.forEach(clip => {
-                    const action = this.mixer.clipAction(clip);
-                    this.animations[clip.name] = action;
-                });
-                
-                if (this.animations['idle']) {
-                    this.playAnimation('idle');
+            // Create animation mixer
+            this.mixer = new THREE.AnimationMixer(model);
+
+            // Load all animations
+            const animations = {
+                'idle': './models/idle.fbx',
+                'idle2': './models/idle2.fbx',
+                'run': './models/run.fbx',
+                'jump': './models/jump.fbx'
+            };
+
+            // Load each animation
+            for (const [name, path] of Object.entries(animations)) {
+                try {
+                    const animFile = await loader.loadAsync(path);
+                    
+                    if (!animFile.animations || animFile.animations.length === 0) {
+                        continue;
+                    }
+
+                    // Get the animation and retarget it to our model
+                    const anim = animFile.animations[0];
+                    const action = this.mixer.clipAction(anim);
+                    this.animations[name] = action;
+                    
+                    // Remove any additional meshes that might have been loaded
+                    animFile.traverse(child => {
+                        if (child.isMesh) {
+                            child.removeFromParent();
+                            if (child.geometry) child.geometry.dispose();
+                            if (child.material) {
+                                if (Array.isArray(child.material)) {
+                                    child.material.forEach(m => m.dispose());
+                                } else {
+                                    child.material.dispose();
+                                }
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error(`Error loading animation ${name}:`, error);
                 }
             }
+
+            // Start with idle animation
+            if (this.animations['idle2']) {
+                this.playAnimation('idle2');
+            }
+
         } catch (error) {
             console.error('Error loading character model:', error);
+            if (this.tempMesh) {
+                this.tempMesh.material.opacity = 0;
+                this.mesh = this.tempMesh;
+            }
         }
     }
 
-    playAnimation(name) {
-        if (this.currentAnimation) {
-            this.currentAnimation.fadeOut(0.5);
-        }
+    playAnimation(name, force = false) {
+        if (!this.mixer || !this.animations[name]) return;
         
-        const newAnimation = this.animations[name];
-        if (newAnimation) {
-            newAnimation.reset().fadeIn(0.5).play();
-            this.currentAnimation = newAnimation;
+        // If it's the same animation and we're not forcing it, don't restart
+        if (this.currentAnimation === name && !force) return;
+        
+        if (this.currentAnimation) {
+            const current = this.animations[this.currentAnimation];
+            const next = this.animations[name];
+            
+            if (current !== next) {
+                // Crossfade to the new animation
+                current.fadeOut(0.2);
+                next.reset().fadeIn(0.2).play();
+                this.currentAnimation = name;
+            }
+        } else {
+            this.animations[name].reset().play();
+            this.currentAnimation = name;
         }
     }
 
@@ -121,26 +178,27 @@ export class Player {
         document.addEventListener('keydown', (e) => this.onKeyDown(e));
         document.addEventListener('keyup', (e) => this.onKeyUp(e));
         
-        // Mouse controls
-        document.addEventListener('click', () => {
-            if (!this.isPointerLocked) {
-                document.body.requestPointerLock();
-            }
-        });
-
-        document.addEventListener('pointerlockchange', () => {
-            this.isPointerLocked = document.pointerLockElement !== null;
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (this.isPointerLocked) {
-                this.cameraRotation.y -= e.movementX * this.mouseSensitivity;
-                this.cameraRotation.x -= e.movementY * this.mouseSensitivity;
+        // Mouse movement handler
+        const onMouseMove = (event) => {
+            if (document.pointerLockElement === document.body) {
+                this.camera.rotation.y -= event.movementX * this.mouseSensitivity;
+                this.camera.rotation.x -= event.movementY * this.mouseSensitivity;
                 
-                // Clamp vertical rotation to prevent over-rotation
-                this.cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraRotation.x));
+                // Limit vertical rotation to prevent over-rotation
+                this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
             }
-        });
+        };
+
+        // Pointer lock change handler
+        const onPointerLockChange = () => {
+            if (document.pointerLockElement === document.body) {
+                document.addEventListener('mousemove', onMouseMove, false);
+            } else {
+                document.removeEventListener('mousemove', onMouseMove, false);
+            }
+        };
+
+        document.addEventListener('pointerlockchange', onPointerLockChange, false);
     }
 
     onKeyDown(event) {
@@ -203,6 +261,12 @@ export class Player {
     }
 
     updateMovement() {
+        // If mesh isn't loaded yet, don't try to update movement
+        if (!this.mesh) return;
+
+        // If jumping, don't process other movements
+        if (this.isJumping) return;
+
         this.movementDirection.set(0, 0, 0);
 
         // Get camera's forward direction (ignoring vertical rotation)
@@ -241,19 +305,42 @@ export class Player {
                 this.mesh.position.copy(previousPosition);
             }
 
+            // Reset idle timer and play run animation only if not jumping
+            this.idleTimer = 0;
             if (!this.isJumping && this.animations['run']) {
                 this.playAnimation('run');
             }
-        } else if (!this.isJumping && this.animations['idle']) {
-            this.playAnimation('idle');
         }
     }
 
     update(deltaTime) {
-        // Update animation mixer with even slower animations during jumps
+        // If mesh isn't loaded yet, don't try to update
+        if (!this.mesh) return;
+
+        // Update animation mixer
         if (this.mixer) {
             const animSpeed = this.isJumping ? 0.6 : 0.8;
             this.mixer.update(deltaTime * animSpeed);
+        }
+
+        // Update idle timer if player is not moving and not jumping and not on ladder
+        if (!this.isMoving() && !this.onLadder) {
+            this.idleTimer += deltaTime;
+            
+            // If we've been still for 10 seconds, play main idle animation
+            if (this.idleTimer >= this.idleDelay) {
+                if (this.animations['idle']) {
+                    this.playAnimation('idle');
+                }
+            } else {
+                // Use idle2 as default idle animation
+                if (this.animations['idle2'] && this.currentAnimation !== 'idle2') {
+                    this.playAnimation('idle2');
+                }
+            }
+        } else {
+            // Reset idle timer when moving
+            this.idleTimer = 0;
         }
 
         // Store previous position for collision detection
@@ -273,101 +360,14 @@ export class Player {
         }
 
         if (this.onLadder) {
-            // Disable gravity while on ladder
-            this.velocity.y = 0;
-            this.isJumping = false;
-
-            let moved = false;
-
-            // Vertical movement on ladder with improved speed control
-            if (this.keys.up) {
-                this.mesh.position.y += this.climbSpeed * 1.2;
-                moved = true;
-                if (this.animations['climb']) {
-                    this.playAnimation('climb');
-                }
-            } else if (this.keys.down) {
-                this.mesh.position.y -= this.climbSpeed * 1.2;
-                moved = true;
-                if (this.animations['climb']) {
-                    this.playAnimation('climb');
-                }
-            }
-
-            // Check if we're still on the ladder after moving
-            const newLadderCheck = this.checkLadderCollision(this.mesh.position);
-            if (!newLadderCheck.isOnLadder) {
-                // Allow a small grace period at the top of the ladder
-                const floorY = Math.floor(this.mesh.position.y / this.floorHeight) * this.floorHeight + 1.25;
-                if (Math.abs(this.mesh.position.y - floorY) > 0.5) {
-                    this.mesh.position.copy(previousPosition);
-                    this.onLadder = true;
-                } else {
-                    this.onLadder = false;
-                }
-            }
-
-            // Allow jumping off the ladder
-            if (this.keys.space) {
-                this.onLadder = false;
-                this.velocity.y = this.jumpForce * 0.8;
-                this.isJumping = true;
-                if (this.animations['jump']) {
-                    this.playAnimation('jump');
-                }
-            }
-
-            // Restrict horizontal movement while on ladder
-            if (this.keys.left || this.keys.right) {
-                // Allow getting off the ladder by moving horizontally
-                const stepOff = 0.8;
-                const newPosition = this.mesh.position.clone();
-                newPosition.x += (this.keys.left ? -stepOff : stepOff);
-                
-                // Check if we can step off safely
-                const floorY = Math.floor(this.mesh.position.y / this.floorHeight) * this.floorHeight + 1.25;
-                if (Math.abs(this.mesh.position.y - floorY) < 0.5) {
-                    this.mesh.position.copy(newPosition);
-                    this.onLadder = false;
-                }
-            }
-
-            if (!moved && this.animations['climbIdle']) {
-                this.playAnimation('climbIdle');
-            }
+            // Handle ladder movement
+            this.handleLadderMovement(previousPosition);
         } else {
             // Normal movement when not on ladder
             this.updateMovement();
 
-            // Apply gravity with even smoother acceleration
-            if (this.isJumping) {
-                // Slower gravity at the peak of the jump
-                const peakHeight = 0.2; // Velocity near the peak
-                if (Math.abs(this.velocity.y) < peakHeight) {
-                    this.velocity.y -= this.gravity * 0.7;
-                } else {
-                    this.velocity.y -= this.gravity;
-                }
-            } else {
-                this.velocity.y -= this.gravity * 1.3; // Slightly faster fall when not jumping
-            }
-            
-            this.mesh.position.y += this.velocity.y;
-
-            // Ground collision
-            const floorY = this.currentFloor * this.floorHeight + 1.25;
-            if (this.mesh.position.y < floorY) {
-                this.mesh.position.y = floorY;
-                this.velocity.y = 0;
-                this.isJumping = false;
-                
-                // Only switch to idle/run animation when actually landing
-                if (this.isMoving() && this.animations['run']) {
-                    this.playAnimation('run');
-                } else if (this.animations['idle']) {
-                    this.playAnimation('idle');
-                }
-            }
+            // Apply gravity
+            this.applyGravity();
         }
 
         // Update current floor based on height
@@ -459,6 +459,125 @@ export class Player {
         // Trigger game over or life loss
         if (this.onPlayerDeath) {
             this.onPlayerDeath();
+        }
+    }
+
+    handleLadderMovement(previousPosition) {
+        // Disable gravity while on ladder
+        this.velocity.y = 0;
+        this.isJumping = false;
+
+        let moved = false;
+
+        // Rotate player to face forward when on ladder
+        const targetRotation = Math.PI; // Face forward
+        this.mesh.rotation.y = targetRotation;
+
+        // Adjust position relative to ladder
+        const ladderOffset = 0.4; // Distance from ladder
+        this.mesh.position.z = Math.round(this.mesh.position.z); // Snap to nearest integer Z position
+        this.mesh.position.x = 0.4; // Slight offset to the right of ladder center
+
+        // Stop any current animations when on ladder
+        if (this.currentAnimation) {
+            const current = this.animations[this.currentAnimation];
+            current.stop();
+            this.currentAnimation = null;
+        }
+
+        // Vertical movement on ladder with reduced speed
+        if (this.keys.up) {
+            this.mesh.position.y += this.climbSpeed;
+            moved = true;
+        } else if (this.keys.down) {
+            this.mesh.position.y -= this.climbSpeed;
+            moved = true;
+        }
+
+        // Check if we're still on the ladder
+        const newLadderCheck = this.checkLadderCollision(this.mesh.position);
+        if (!newLadderCheck.isOnLadder) {
+            const floorY = Math.floor(this.mesh.position.y / this.floorHeight) * this.floorHeight + 1.25;
+            if (Math.abs(this.mesh.position.y - floorY) > 0.5) {
+                this.mesh.position.copy(previousPosition);
+                this.onLadder = true;
+            } else {
+                this.onLadder = false;
+                if (this.animations['idle']) {
+                    this.playAnimation('idle');
+                }
+            }
+        }
+
+        // Handle jumping off ladder with reduced force
+        if (this.keys.space) {
+            this.onLadder = false;
+            this.velocity.y = this.jumpForce * 0.6;
+            this.isJumping = true;
+            if (this.animations['jump']) {
+                this.playAnimation('jump');
+            }
+        }
+
+        // Handle horizontal movement with reduced step off
+        if (this.keys.left || this.keys.right) {
+            const stepOff = 0.4;
+            const newPosition = this.mesh.position.clone();
+            newPosition.x += (this.keys.left ? -stepOff : stepOff);
+            
+            const floorY = Math.floor(this.mesh.position.y / this.floorHeight) * this.floorHeight + 1.25;
+            if (Math.abs(this.mesh.position.y - floorY) < 0.5) {
+                this.mesh.position.copy(newPosition);
+                this.onLadder = false;
+                if (this.animations['idle']) {
+                    this.playAnimation('idle');
+                }
+            }
+        }
+    }
+
+    applyGravity() {
+        if (this.isJumping) {
+            // Slower gravity at the peak of the jump
+            const peakHeight = 0.1;
+            if (Math.abs(this.velocity.y) < peakHeight) {
+                this.velocity.y -= this.gravity * 0.5;
+            } else {
+                this.velocity.y -= this.gravity;
+            }
+        } else {
+            this.velocity.y -= this.gravity * 1.1;
+        }
+        
+        this.mesh.position.y += this.velocity.y;
+
+        // Ground collision
+        const floorY = this.currentFloor * this.floorHeight + 1.25;
+        if (this.mesh.position.y < floorY) {
+            this.mesh.position.y = floorY;
+            this.velocity.y = 0;
+            this.isJumping = false;
+            
+            // When landing, check if moving to play run animation, otherwise use idle2
+            if (this.isMoving() && this.animations['run']) {
+                this.playAnimation('run');
+            } else if (this.animations['idle2']) {
+                this.playAnimation('idle2');
+            }
+        }
+    }
+
+    // Add new method to enable controls
+    enableControls() {
+        if (!document.pointerLockElement) {
+            document.body.requestPointerLock();
+        }
+    }
+
+    // Add new method to disable controls
+    disableControls() {
+        if (document.pointerLockElement === document.body) {
+            document.exitPointerLock();
         }
     }
 } 
