@@ -580,4 +580,30 @@ export class Player {
             document.exitPointerLock();
         }
     }
+
+    reset() {
+        // Reset position
+        if (this.mesh) {
+            this.mesh.position.set(0, 0, 0);
+            this.mesh.rotation.set(0, 0, 0);
+        }
+        
+        // Reset movement state
+        this.velocity.set(0, 0, 0);
+        this.isJumping = false;
+        this.isGrounded = false;
+        this.isFalling = false;
+        this.isClimbing = false;
+        
+        // Reset animation
+        if (this.animations['idle']) {
+            this.playAnimation('idle');
+        }
+        
+        // Reset camera position
+        if (this.camera) {
+            this.camera.position.set(0, 5, 10);
+            this.camera.lookAt(0, 0, 0);
+        }
+    }
 } 

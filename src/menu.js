@@ -357,80 +357,215 @@ export class GameMenu {
     }
 
     showMenu() {
+        console.log('Showing main menu...');
         if (this.menuContainer) {
+            // Ensure menu is in the DOM
+            if (!document.body.contains(this.menuContainer)) {
+                document.body.appendChild(this.menuContainer);
+            }
+            
+            // Reset menu state
+            this.currentSelection = 0;
+            
+            // Show menu and update selection
             this.menuContainer.style.display = 'flex';
+            this.updateSelection();
+            
+            // Ensure menu is on top
+            this.menuContainer.style.zIndex = '9999';
+            
+            // Reset any game-specific elements
+            const scoreElement = document.getElementById('score');
+            if (scoreElement) {
+                scoreElement.style.display = 'none';
+            }
+        } else {
+            console.log('Creating new menu...');
+            this.init();
         }
     }
 
     createPauseMenu() {
+        // Remove existing pause menu if it exists
+        if (this.pauseMenu) {
+            document.body.removeChild(this.pauseMenu);
+        }
+
         this.pauseMenu = document.createElement('div');
         this.pauseMenu.style.position = 'fixed';
-        this.pauseMenu.style.top = '50%';
-        this.pauseMenu.style.left = '50%';
-        this.pauseMenu.style.transform = 'translate(-50%, -50%)';
-        this.pauseMenu.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        this.pauseMenu.style.padding = '20px';
-        this.pauseMenu.style.borderRadius = '10px';
+        this.pauseMenu.style.top = '0';
+        this.pauseMenu.style.left = '0';
+        this.pauseMenu.style.width = '100%';
+        this.pauseMenu.style.height = '100%';
+        this.pauseMenu.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
         this.pauseMenu.style.display = 'none';
-        this.pauseMenu.style.zIndex = '1000';
+        this.pauseMenu.style.flexDirection = 'column';
+        this.pauseMenu.style.alignItems = 'center';
+        this.pauseMenu.style.justifyContent = 'center';
+        this.pauseMenu.style.zIndex = '9999';
         this.pauseMenu.style.fontFamily = "'Press Start 2P', monospace";
-        this.pauseMenu.style.color = 'white';
-        this.pauseMenu.style.textAlign = 'center';
+        this.pauseMenu.style.pointerEvents = 'auto';
 
-        const title = document.createElement('h2');
-        title.textContent = 'PAUSED';
-        title.style.marginBottom = '20px';
+        // Create pause title
+        const pauseTitle = document.createElement('div');
+        pauseTitle.textContent = 'PAUSED';
+        pauseTitle.style.color = '#ff69b4';
+        pauseTitle.style.fontSize = '48px';
+        pauseTitle.style.marginBottom = '60px';
+        pauseTitle.style.textShadow = '4px 4px 0px rgba(0, 0, 0, 0.5)';
 
-        const resumeButton = document.createElement('button');
-        resumeButton.textContent = 'Resume';
-        resumeButton.style.marginBottom = '10px';
-        resumeButton.style.padding = '10px 20px';
-        resumeButton.style.backgroundColor = '#4CAF50';
-        resumeButton.style.border = 'none';
-        resumeButton.style.color = 'white';
-        resumeButton.style.cursor = 'pointer';
-        resumeButton.style.fontFamily = "'Press Start 2P', monospace";
-        resumeButton.style.fontSize = '16px';
-        resumeButton.addEventListener('click', () => this.resumeGame());
+        // Create pause menu options container
+        const pauseOptions = document.createElement('div');
+        pauseOptions.style.display = 'flex';
+        pauseOptions.style.flexDirection = 'column';
+        pauseOptions.style.gap = '30px';
+        pauseOptions.style.alignItems = 'center';
 
-        const mainMenuButton = document.createElement('button');
-        mainMenuButton.textContent = 'Main Menu';
-        mainMenuButton.style.padding = '10px 20px';
-        mainMenuButton.style.backgroundColor = '#f44336';
-        mainMenuButton.style.border = 'none';
-        mainMenuButton.style.color = 'white';
-        mainMenuButton.style.cursor = 'pointer';
-        mainMenuButton.style.fontFamily = "'Press Start 2P', monospace";
-        mainMenuButton.style.fontSize = '16px';
-        mainMenuButton.addEventListener('click', () => {
-            this.hidePauseMenu();
-            this.showMenu();
-            // Reset game state if needed
+        // Create pause menu options
+        const resumeOption = document.createElement('div');
+        resumeOption.textContent = 'RESUME';
+        resumeOption.style.color = '#ffffff';
+        resumeOption.style.fontSize = '24px';
+        resumeOption.style.cursor = 'pointer';
+        resumeOption.style.textShadow = '2px 2px 0px rgba(0, 0, 0, 0.5)';
+        resumeOption.addEventListener('click', () => this.resumeGame());
+
+        const menuOption = document.createElement('div');
+        menuOption.textContent = 'RETURN TO MENU';
+        menuOption.style.color = '#ffffff';
+        menuOption.style.fontSize = '24px';
+        menuOption.style.cursor = 'pointer';
+        menuOption.style.textShadow = '2px 2px 0px rgba(0, 0, 0, 0.5)';
+        menuOption.addEventListener('click', () => this.returnToMainMenu());
+
+        const exitOption = document.createElement('div');
+        exitOption.textContent = 'EXIT';
+        exitOption.style.color = '#ffffff';
+        exitOption.style.fontSize = '24px';
+        exitOption.style.cursor = 'pointer';
+        exitOption.style.textShadow = '2px 2px 0px rgba(0, 0, 0, 0.5)';
+        exitOption.addEventListener('click', () => this.exitGame());
+
+        // Add hover and selection effects
+        [resumeOption, menuOption, exitOption].forEach(option => {
+            option.addEventListener('mouseover', () => {
+                option.style.color = '#ff69b4';
+                option.classList.add('selected');
+            });
+            option.addEventListener('mouseout', () => {
+                if (!option.classList.contains('selected')) {
+                    option.style.color = '#ffffff';
+                }
+            });
         });
 
-        this.pauseMenu.appendChild(title);
-        this.pauseMenu.appendChild(resumeButton);
-        this.pauseMenu.appendChild(document.createElement('br'));
-        this.pauseMenu.appendChild(document.createElement('br'));
-        this.pauseMenu.appendChild(mainMenuButton);
+        // Add options to container
+        pauseOptions.appendChild(resumeOption);
+        pauseOptions.appendChild(menuOption);
+        pauseOptions.appendChild(exitOption);
 
+        // Add elements to pause menu
+        this.pauseMenu.appendChild(pauseTitle);
+        this.pauseMenu.appendChild(pauseOptions);
+
+        // Add pause menu to document
         document.body.appendChild(this.pauseMenu);
+
+        // Add keyboard navigation for pause menu
+        this.setupPauseMenuKeyboardControls([resumeOption, menuOption, exitOption]);
+    }
+
+    setupPauseMenuKeyboardControls(options) {
+        const handleKeydown = (e) => {
+            if (!this.pauseMenu || this.pauseMenu.style.display === 'none') return;
+
+            let currentIndex = options.findIndex(opt => opt.classList.contains('selected'));
+            if (currentIndex === -1) currentIndex = 0;
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    currentIndex = (currentIndex - 1 + options.length) % options.length;
+                    break;
+                case 'ArrowDown':
+                    currentIndex = (currentIndex + 1) % options.length;
+                    break;
+                case 'Enter':
+                    options[currentIndex].click();
+                    break;
+                case 'Escape':
+                    this.resumeGame();
+                    break;
+            }
+
+            options.forEach((opt, i) => {
+                if (i === currentIndex) {
+                    opt.style.color = '#ff69b4';
+                    opt.classList.add('selected');
+                } else {
+                    opt.style.color = '#ffffff';
+                    opt.classList.remove('selected');
+                }
+            });
+        };
+
+        // Remove existing listener if any
+        if (this._pauseMenuKeyHandler) {
+            document.removeEventListener('keydown', this._pauseMenuKeyHandler);
+        }
+
+        this._pauseMenuKeyHandler = handleKeydown;
+        document.addEventListener('keydown', this._pauseMenuKeyHandler);
     }
 
     showPauseMenu() {
+        console.log('Showing pause menu...');
         if (this.pauseMenu) {
-            this.pauseMenu.style.display = 'block';
+            // Ensure the menu is in the DOM
+            if (!document.body.contains(this.pauseMenu)) {
+                document.body.appendChild(this.pauseMenu);
+            }
+            this.pauseMenu.style.display = 'flex';
+            
+            // Reset selection to first option
+            const options = this.pauseMenu.querySelectorAll('div[style*="cursor: pointer"]');
+            options.forEach((opt, i) => {
+                if (i === 0) {
+                    opt.style.color = '#ff69b4';
+                    opt.classList.add('selected');
+                } else {
+                    opt.style.color = '#ffffff';
+                    opt.classList.remove('selected');
+                }
+            });
+        } else {
+            console.log('Creating pause menu...');
+            this.createPauseMenu();
+            this.showPauseMenu();
         }
     }
 
     hidePauseMenu() {
+        console.log('Hiding pause menu...');
         if (this.pauseMenu) {
             this.pauseMenu.style.display = 'none';
+            // Remove from DOM to ensure it's completely hidden
+            if (document.body.contains(this.pauseMenu)) {
+                document.body.removeChild(this.pauseMenu);
+            }
         }
     }
 
     resumeGame() {
-        this.hidePauseMenu();
         this.game.resume();
+    }
+
+    returnToMainMenu() {
+        console.log('Returning to landing page...');
+        // Reload the page to return to the initial state
+        window.location.reload();
+    }
+
+    exitGame() {
+        this.game.exitGame();
     }
 } 

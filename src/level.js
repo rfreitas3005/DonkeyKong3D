@@ -618,6 +618,37 @@ export class Level {
         }
     }
 
+    startBarrels() {
+        console.log('Starting barrels');
+        this.clearBarrels(); // Clear any existing barrels
+        this.gameStarted = true;
+        this.barrelSpawnTimer = 0;
+    }
+
+    pauseBarrels() {
+        console.log('Pausing barrels');
+        this.gameStarted = false;
+        // Store current state of barrels
+        this.barrels.forEach(barrel => {
+            barrel.userData.wasMoving = barrel.userData.movingToBack;
+        });
+    }
+
+    resumeBarrels() {
+        console.log('Resuming barrels');
+        this.gameStarted = true;
+        // Restore barrel movement state
+        this.barrels.forEach(barrel => {
+            barrel.userData.movingToBack = barrel.userData.wasMoving;
+        });
+    }
+
+    stopBarrels() {
+        console.log('Stopping barrels');
+        this.gameStarted = false;
+        this.clearBarrels();
+    }
+
     clearBarrels() {
         // Remove any existing barrels from the scene
         for (let barrel of this.barrels) {
@@ -628,10 +659,35 @@ export class Level {
         this.barrels = [];
     }
 
-    startBarrels() {
-        console.log('Starting barrels');
-        this.clearBarrels(); // Limpa quaisquer barris existentes
-        this.gameStarted = true;
-        this.barrelSpawnTimer = 0;
+    reset() {
+        console.log('Resetting level');
+        // Stop barrel spawning
+        this.gameStarted = false;
+        
+        // Clear all barrels
+        this.clearBarrels();
+        
+        // Reset any other level-specific state
+        this.score = 0;
+        this.updateScore();
+        
+        // Reset Donkey Kong animation
+        if (this.donkeyKong) {
+            this.donkeyKong.children.forEach(part => {
+                if (part.rotation) {
+                    part.rotation.set(0, 0, 0);
+                }
+            });
+            this.donkeyKongAnimationTime = 0;
+            this.isThrowingBarrel = false;
+            this.throwAnimationTime = 0;
+        }
+    }
+
+    updateScore() {
+        const scoreElement = document.getElementById('score');
+        if (scoreElement) {
+            scoreElement.textContent = `SCORE: ${this.score.toString().padStart(6, '0')}`;
+        }
     }
 } 
