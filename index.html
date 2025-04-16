@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donkey Kong 3D</title>
+    <link rel="stylesheet" href="src/styles/menu.css">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        #score {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: 'PressStart2P', monospace;
+            font-size: 24px;
+            z-index: 100;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <script type="module">
+        import { Game } from './src/game.js';
+        
+        // Create and initialize game
+        const game = new Game();
+        
+        // The menu system will handle starting the game
+    </script>
+</body>
+</html> 
