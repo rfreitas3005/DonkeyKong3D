@@ -210,68 +210,171 @@ export class GameMenu {
         const optionsContent = document.createElement('div');
         optionsContent.style.color = 'white';
         optionsContent.style.textAlign = 'center';
-        optionsContent.innerHTML = `
-            <h2 style="font-size: 32px; margin-bottom: 40px;">OPTIONS</h2>
-            <div style="display: flex; flex-direction: column; gap: 20px;">
-                <div>
-                    <label>Mouse Sensitivity: ${Math.round(this.options.sensitivity * 5000)}</label>
-                    <input type="range" min="1" max="10" value="${this.options.sensitivity * 5000}" 
-                           style="width: 200px; margin-top: 10px;"
-                           onInput="this.previousElementSibling.textContent = 'Mouse Sensitivity: ' + this.value">
-                        </div>
-                <div>
-                    <label>Volume: ${Math.round(this.options.volume * 100)}%</label>
-                    <input type="range" min="0" max="100" value="${this.options.volume * 100}"
-                           style="width: 200px; margin-top: 10px;"
-                           onInput="this.previousElementSibling.textContent = 'Volume: ' + this.value + '%'">
-                    </div>
-                <div>
-                    <label>
-                        <input type="checkbox" ${this.options.fullscreen ? 'checked' : ''}>
-                            Fullscreen
-                        </label>
-                </div>
-                <button style="margin-top: 20px; padding: 10px 20px; background: #4CAF50; border: none; color: white; cursor: pointer;">
-                    Back to Menu
-                </button>
-            </div>
-        `;
+        optionsContent.style.display = 'flex';
+        optionsContent.style.flexDirection = 'column';
+        optionsContent.style.alignItems = 'center';
+        optionsContent.style.gap = '20px';
+        optionsContent.style.padding = '20px';
+
+        // Create title
+        const title = document.createElement('h2');
+        title.textContent = 'OPTIONS';
+        title.style.fontSize = '32px';
+        title.style.marginBottom = '40px';
+        title.style.color = '#ff69b4';
+
+        // Create options container
+        const optionsContainer = document.createElement('div');
+        optionsContainer.style.display = 'flex';
+        optionsContainer.style.flexDirection = 'column';
+        optionsContainer.style.gap = '20px';
+        optionsContainer.style.width = '300px';
+
+        // Create sensitivity option
+        const sensitivityDiv = document.createElement('div');
+        sensitivityDiv.style.display = 'flex';
+        sensitivityDiv.style.flexDirection = 'column';
+        sensitivityDiv.style.alignItems = 'center';
+        sensitivityDiv.style.gap = '10px';
+
+        const sensitivityLabel = document.createElement('label');
+        sensitivityLabel.textContent = `Mouse Sensitivity: ${Math.round(this.options.sensitivity * 5000)}`;
+        sensitivityLabel.style.fontSize = '16px';
+
+        const sensitivitySlider = document.createElement('input');
+        sensitivitySlider.type = 'range';
+        sensitivitySlider.min = '1';
+        sensitivitySlider.max = '10';
+        sensitivitySlider.value = this.options.sensitivity * 5000;
+        sensitivitySlider.style.width = '200px';
+        sensitivitySlider.style.cursor = 'pointer';
+
+        sensitivityDiv.appendChild(sensitivityLabel);
+        sensitivityDiv.appendChild(sensitivitySlider);
+
+        // Create volume option
+        const volumeDiv = document.createElement('div');
+        volumeDiv.style.display = 'flex';
+        volumeDiv.style.flexDirection = 'column';
+        volumeDiv.style.alignItems = 'center';
+        volumeDiv.style.gap = '10px';
+
+        const volumeLabel = document.createElement('label');
+        volumeLabel.textContent = `Volume: ${Math.round(this.options.volume * 100)}%`;
+        volumeLabel.style.fontSize = '16px';
+
+        const volumeSlider = document.createElement('input');
+        volumeSlider.type = 'range';
+        volumeSlider.min = '0';
+        volumeSlider.max = '100';
+        volumeSlider.value = this.options.volume * 100;
+        volumeSlider.style.width = '200px';
+        volumeSlider.style.cursor = 'pointer';
+
+        volumeDiv.appendChild(volumeLabel);
+        volumeDiv.appendChild(volumeSlider);
+
+        // Create fullscreen option
+        const fullscreenDiv = document.createElement('div');
+        fullscreenDiv.style.display = 'flex';
+        fullscreenDiv.style.alignItems = 'center';
+        fullscreenDiv.style.gap = '10px';
+        fullscreenDiv.style.cursor = 'pointer';
+
+        const fullscreenCheckbox = document.createElement('input');
+        fullscreenCheckbox.type = 'checkbox';
+        fullscreenCheckbox.checked = this.options.fullscreen;
+        fullscreenCheckbox.style.cursor = 'pointer';
+
+        const fullscreenLabel = document.createElement('label');
+        fullscreenLabel.textContent = 'Fullscreen';
+        fullscreenLabel.style.fontSize = '16px';
+        fullscreenLabel.style.cursor = 'pointer';
+
+        fullscreenDiv.appendChild(fullscreenCheckbox);
+        fullscreenDiv.appendChild(fullscreenLabel);
+
+        // Create back button
+        const backButton = document.createElement('button');
+        backButton.textContent = 'Back to Menu';
+        backButton.style.marginTop = '20px';
+        backButton.style.padding = '10px 20px';
+        backButton.style.backgroundColor = '#4CAF50';
+        backButton.style.border = 'none';
+        backButton.style.color = 'white';
+        backButton.style.cursor = 'pointer';
+        backButton.style.fontSize = '16px';
+        backButton.style.borderRadius = '5px';
+
+        // Add all options to container
+        optionsContainer.appendChild(sensitivityDiv);
+        optionsContainer.appendChild(volumeDiv);
+        optionsContainer.appendChild(fullscreenDiv);
+        optionsContainer.appendChild(backButton);
+
+        // Add all elements to options content
+        optionsContent.appendChild(title);
+        optionsContent.appendChild(optionsContainer);
 
         // Clear and add options content
         this.menuContainer.innerHTML = '';
         this.menuContainer.appendChild(optionsContent);
 
-        // Add event listeners for options
-        const sensitivitySlider = optionsContent.querySelector('input[type="range"]:first-of-type');
-        sensitivitySlider.addEventListener('change', (e) => {
-            this.options.sensitivity = e.target.value / 5000;
+        // Add event listeners
+        sensitivitySlider.addEventListener('input', (e) => {
+            const value = e.target.value;
+            sensitivityLabel.textContent = `Mouse Sensitivity: ${value}`;
+            this.options.sensitivity = value / 5000;
             if (this.game.player) {
                 this.game.player.mouseSensitivity = this.options.sensitivity;
             }
         });
 
-        const volumeSlider = optionsContent.querySelector('input[type="range"]:nth-of-type(2)');
-        volumeSlider.addEventListener('change', (e) => {
-            this.options.volume = e.target.value / 100;
-            // Implement volume control when audio is added
-        });
-
-        const fullscreenCheckbox = optionsContent.querySelector('input[type="checkbox"]');
-        fullscreenCheckbox.addEventListener('change', (e) => {
-            this.options.fullscreen = e.target.checked;
-            if (this.options.fullscreen) {
-                document.documentElement.requestFullscreen();
-            } else if (document.fullscreenElement) {
-                document.exitFullscreen();
+        volumeSlider.addEventListener('input', (e) => {
+            const value = e.target.value;
+            volumeLabel.textContent = `Volume: ${value}%`;
+            this.options.volume = value / 100;
+            if (this.game.audio) {
+                this.game.audio.setVolume(this.options.volume);
             }
         });
 
-        // Add back button functionality
-        const backButton = optionsContent.querySelector('button');
+        fullscreenDiv.addEventListener('click', () => {
+            fullscreenCheckbox.checked = !fullscreenCheckbox.checked;
+            this.options.fullscreen = fullscreenCheckbox.checked;
+            if (this.options.fullscreen) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) {
+                    document.documentElement.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        });
+
         backButton.addEventListener('click', () => {
+            // Restore the main menu content
             this.menuContainer.innerHTML = mainContent;
+            
+            // Reattach event listeners to menu items
+            this.menuItems = Array.from(this.menuContainer.querySelectorAll('div[style*="cursor: pointer"]'));
             this.setupKeyboardControls();
+            
+            // Reset and update selection
+            this.currentSelection = 0;
             this.updateSelection();
+            
+            // Show the menu
+            this.showMenu();
         });
     }
 

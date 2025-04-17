@@ -13,6 +13,8 @@ export class Player {
         this.idleTimer = 0;
         this.idleDelay = 10; // 10 seconds delay before main idle animation
         this.isJumping = false;
+        this.lastJumpTime = 0; // Track last jump time
+        this.jumpCooldown = 1.0; // 1 second cooldown
         
         // Reduced movement speeds
         this.moveSpeed = 0.04;
@@ -181,11 +183,11 @@ export class Player {
         // Mouse movement handler
         const onMouseMove = (event) => {
             if (document.pointerLockElement === document.body) {
-                this.camera.rotation.y -= event.movementX * this.mouseSensitivity;
-                this.camera.rotation.x -= event.movementY * this.mouseSensitivity;
+                this.cameraRotation.y -= event.movementX * this.mouseSensitivity;
+                this.cameraRotation.x -= event.movementY * this.mouseSensitivity;
                 
                 // Limit vertical rotation to prevent over-rotation
-                this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
+                this.cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraRotation.x));
             }
         };
 
@@ -193,8 +195,10 @@ export class Player {
         const onPointerLockChange = () => {
             if (document.pointerLockElement === document.body) {
                 document.addEventListener('mousemove', onMouseMove, false);
+                this.isPointerLocked = true;
             } else {
                 document.removeEventListener('mousemove', onMouseMove, false);
+                this.isPointerLocked = false;
             }
         };
 
@@ -220,9 +224,11 @@ export class Player {
                 this.keys.down = true;
                 break;
             case ' ':
-                if (!this.isJumping) {
+                const currentTime = performance.now() / 1000; // Convert to seconds
+                if (!this.isJumping && (currentTime - this.lastJumpTime) >= this.jumpCooldown) {
                     this.velocity.y = this.jumpForce;
                     this.isJumping = true;
+                    this.lastJumpTime = currentTime;
                     if (this.animations['jump']) {
                         this.playAnimation('jump');
                     }
