@@ -18,6 +18,7 @@ export class Game {
         this.stats = null;
         this.lastTimeStamp = 0;
         this.countdownElement = null;
+        this.debugMenu = new DebugMenu(this);
 
         // Initialize menu first
         this.menu = new GameMenu(this);
@@ -25,10 +26,19 @@ export class Game {
 
         // Add pause key listener
         document.addEventListener('keydown', (e) => {
+            // Pausar com tecla P
             if (e.key.toLowerCase() === 'p' && this.isRunning) {
                 if (this.isPaused) {
                     this.resume();
                 } else {
+                    this.pause();
+                }
+            }
+            
+            // Pausar com tecla ESC
+            if (e.key === 'Escape' && this.isRunning) {
+                if (!this.isPaused) {
+                    console.log('ESC key pressed - pausing game');
                     this.pause();
                 }
             }
@@ -75,6 +85,14 @@ export class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.shadowMap.enabled = true;
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Garantir que o canvas está visível
+            this.renderer.domElement.style.display = 'block';
+            this.renderer.domElement.style.position = 'absolute';
+            this.renderer.domElement.style.top = '0';
+            this.renderer.domElement.style.left = '0';
+            this.renderer.domElement.style.zIndex = '0';
+            
             document.body.appendChild(this.renderer.domElement);
 
             // Lighting setup
@@ -112,6 +130,9 @@ export class Game {
 
             // Start rendering loop
             this.animate();
+            
+            // Forçar uma renderização inicial
+            this.renderer.render(this.scene, this.camera);
 
             console.log('Game initialization complete');
         } catch (error) {
@@ -161,31 +182,69 @@ export class Game {
         try {
             console.log('Starting gameplay...');
             
-            // Initialize debug menu if needed
-            if (window.location.hash === '#debug') {
-                this.debugMenu = new DebugMenu(this.scene);
+            // Certificar que a cena está visível
+            if (this.scene) {
+                this.scene.visible = true;
+                console.log('Scene visibility set to true');
+            } else {
+                console.error('startGameplay: Scene is not defined!');
+                return; // Não continuar se a cena não existe
             }
 
             // Enable player controls
             if (this.player) {
                 console.log('Enabling player controls...');
                 this.player.enabled = true;
-                this.player.enableControls(); // Enable pointer lock
+                
+                // Adicionar listener de clique para todo o documento para ajudar com PointerLock
+                const enableGameClick = () => {
+                    console.log('Document clicked, enabling player controls...');
+                    this.player.enableControls();
+                    document.removeEventListener('click', enableGameClick);
+                };
+                
+                document.addEventListener('click', enableGameClick);
+                
+                // Tentar habilitar os controles, mas o usuário precisará clicar em breve
+                this.player.enableControls(); 
+                
+                // Forçar atualização da câmera imediatamente
+                console.log('Forcing initial camera update...');
+                this.player.updateCameraPosition(); 
+            } else {
+                console.error('startGameplay: Player is not defined!');
+                return; // Não continuar se o jogador não existe
             }
 
             // Start the game loop and enable barrel spawning
             console.log('Starting game loop...');
             this.isRunning = true;
+            this.isPaused = false; // Garantir que não está pausado
+            this.clock.start(); // Garantir que o clock está rodando
             
             if (this.level) {
                 console.log('Starting barrel spawning...');
                 this.level.gameStarted = true;
                 this.level.startBarrels();
+            } else {
+                console.warn('startGameplay: Level is not defined, barrels will not spawn.');
+            }
+            
+            // Forçar uma renderização inicial para garantir visibilidade
+            if (this.renderer && this.camera) {
+                console.log('Forcing initial render after starting gameplay...');
+                this.renderer.render(this.scene, this.camera);
+            } else {
+                console.error('startGameplay: Renderer or Camera is not defined for initial render!');
             }
 
             console.log('Game successfully started!');
         } catch (error) {
             console.error('Error starting gameplay:', error);
+            // Adicionar mais detalhes ao erro se possível
+            if (error.stack) {
+                console.error(error.stack);
+            }
             throw error;
         }
     }
@@ -205,6 +264,8 @@ export class Game {
     pause() {
         if (!this.isRunning || this.isPaused) return;
         
+        console.log('Pausing game...');
+        
         // Show pause menu first before stopping the game
         this.menu.showPauseMenu();
         
@@ -214,6 +275,13 @@ export class Game {
         if (this.player) {
             this.player.enabled = false;
             this.player.disableControls();
+            
+            // Remover qualquer instrução de clique que possa estar visível
+            const instruction = document.getElementById('pointer-lock-instruction');
+            if (instruction) {
+                instruction.remove();
+                console.log('Removing instruction element during pause');
+            }
         }
         
         if (this.level) {
@@ -327,7 +395,7 @@ export class Game {
 
         if (this.stats) this.stats.begin();
 
-        // Only update game if not paused
+        // Only update game components if not paused
         if (!this.isPaused) {
             const deltaTime = this.clock.getDelta();
             
@@ -339,8 +407,10 @@ export class Game {
                 this.level.update(deltaTime);
             }
             if (this.debugMenu) this.debugMenu.update();
-
-            // Render scene
+        }
+        
+        // Sempre renderizar a cena, mesmo quando pausado
+        if (this.scene && this.camera) {
             this.renderer.render(this.scene, this.camera);
         }
 

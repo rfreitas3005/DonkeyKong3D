@@ -30,6 +30,7 @@ export class Player {
         this.isLoaded = false;
         this.floorLength = 200;
         this.laneWidth = 6;
+        this.enabled = false; // Adicionar propriedade enabled
 
         // Camera control variables
         this.cameraOffset = new THREE.Vector3(0, 3, 6);
@@ -67,6 +68,7 @@ export class Player {
         const loader = new FBXLoader();
         
         try {
+            console.log('Carregando modelo do jogador...');
             // Load the base character model first
             const model = await loader.loadAsync('./models/skin.fbx');
             
@@ -74,6 +76,31 @@ export class Player {
             model.scale.setScalar(0.013);
             model.position.copy(this.tempMesh.position);
             model.rotation.copy(this.tempMesh.rotation);
+            
+            // Garantir que o modelo é visível
+            model.visible = true;
+            model.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    child.visible = true;
+                    
+                    // Garantir que os materiais estão configurados corretamente
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => {
+                                m.needsUpdate = true;
+                                m.transparent = false;
+                                m.opacity = 1.0;
+                            });
+                        } else {
+                            child.material.needsUpdate = true;
+                            child.material.transparent = false;
+                            child.material.opacity = 1.0;
+                        }
+                    }
+                }
+            });
             
             // Clean up temporary mesh
             if (this.tempMesh && this.tempMesh.parent) {
@@ -86,6 +113,7 @@ export class Player {
             // Set up the new model
             this.mesh = model;
             this.scene.add(this.mesh);
+            console.log('Modelo do jogador adicionado à cena');
             this.isLoaded = true;
 
             // Create animation mixer
@@ -137,11 +165,18 @@ export class Player {
                 this.playAnimation('idle2');
             }
 
+            // Forçar uma atualização do render
+            if (this.scene && this.scene.parent && this.scene.parent.renderer) {
+                this.scene.parent.renderer.render(this.scene, this.camera);
+            }
+
         } catch (error) {
             console.error('Error loading character model:', error);
             if (this.tempMesh) {
-                this.tempMesh.material.opacity = 0;
+                this.tempMesh.material.opacity = 1.0; // Tornar visível para debug
+                this.tempMesh.material.color.set(0xFF0000); // Vermelho para indicar erro
                 this.mesh = this.tempMesh;
+                this.isLoaded = true; // Marcar como carregado mesmo com erro
             }
         }
     }
@@ -169,6 +204,8 @@ export class Player {
     }
 
     setupControls() {
+        console.log('Setting up player controls...');
+        
         this.keys = {
             left: false,
             right: false,
@@ -177,8 +214,22 @@ export class Player {
             jump: false
         };
 
-        document.addEventListener('keydown', (e) => this.onKeyDown(e));
-        document.addEventListener('keyup', (e) => this.onKeyUp(e));
+        // Remover handlers antigos se existirem
+        if (this._keyDownHandler) {
+            document.removeEventListener('keydown', this._keyDownHandler);
+        }
+        if (this._keyUpHandler) {
+            document.removeEventListener('keyup', this._keyUpHandler);
+        }
+
+        // Criar novos handlers e armazenar as referências
+        this._keyDownHandler = (e) => this.onKeyDown(e);
+        this._keyUpHandler = (e) => this.onKeyUp(e);
+
+        // Adicionar os novos handlers
+        document.addEventListener('keydown', this._keyDownHandler);
+        document.addEventListener('keyup', this._keyUpHandler);
+        console.log('Keyboard handlers registered');
         
         // Mouse movement handler
         const onMouseMove = (event) => {
@@ -196,34 +247,70 @@ export class Player {
             if (document.pointerLockElement === document.body) {
                 document.addEventListener('mousemove', onMouseMove, false);
                 this.isPointerLocked = true;
+                console.log('Pointer lock acquired');
             } else {
                 document.removeEventListener('mousemove', onMouseMove, false);
                 this.isPointerLocked = false;
+                console.log('Pointer lock lost');
+                
+                // Se o jogo ainda estiver em execução e o jogador habilitado, 
+                // exibir mensagem para reclique
+                if (this.enabled) {
+                    this.enableControls();
+                }
             }
         };
 
-        document.addEventListener('pointerlockchange', onPointerLockChange, false);
+        // Pointer lock error handler
+        const onPointerLockError = (event) => {
+            console.error('Pointer lock error:', event);
+            alert('Seu navegador não permitiu o controle do mouse. Clique na tela novamente ou verifique as permissões do site.');
+            
+            // Exibir instrução novamente
+            this.enableControls();
+        };
+
+        // Remover handlers antigos de pointer lock
+        document.removeEventListener('pointerlockchange', this._pointerLockChangeHandler);
+        document.removeEventListener('pointerlockerror', this._pointerLockErrorHandler);
+
+        // Armazenar referências e adicionar novos handlers
+        this._pointerLockChangeHandler = onPointerLockChange;
+        this._pointerLockErrorHandler = onPointerLockError;
+        
+        document.addEventListener('pointerlockchange', this._pointerLockChangeHandler, false);
+        document.addEventListener('pointerlockerror', this._pointerLockErrorHandler, false);
+        
+        console.log('Player controls setup complete');
     }
 
     onKeyDown(event) {
-        switch (event.key) {
-            case 'a':
+        console.log('Key pressed:', event.key, event.code);
+        
+        // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
+        switch (event.code) {
+            case 'KeyA':
             case 'ArrowLeft':
+                console.log('LEFT key pressed');
                 this.keys.left = true;
                 break;
-            case 'd':
+            case 'KeyD':
             case 'ArrowRight':
+                console.log('RIGHT key pressed');
                 this.keys.right = true;
                 break;
-            case 'w':
+            case 'KeyW':
             case 'ArrowUp':
+                console.log('UP key pressed');
                 this.keys.up = true;
                 break;
-            case 's':
+            case 'KeyS':
             case 'ArrowDown':
+                console.log('DOWN key pressed');
                 this.keys.down = true;
                 break;
-            case ' ':
+            case 'Space':
+                console.log('JUMP key pressed');
                 const currentTime = performance.now() / 1000; // Convert to seconds
                 if (!this.isJumping && (currentTime - this.lastJumpTime) >= this.jumpCooldown) {
                     this.velocity.y = this.jumpForce;
@@ -234,26 +321,72 @@ export class Player {
                     }
                 }
                 break;
+            default:
+                // Verificação alternativa para maior compatibilidade
+                if (event.key === 'a' || event.key === 'A' || event.keyCode === 65 || event.keyCode === 37) { // A ou seta esquerda
+                    console.log('LEFT key detected via alternative method');
+                    this.keys.left = true;
+                } else if (event.key === 'd' || event.key === 'D' || event.keyCode === 68 || event.keyCode === 39) { // D ou seta direita
+                    console.log('RIGHT key detected via alternative method');
+                    this.keys.right = true;
+                } else if (event.key === 'w' || event.key === 'W' || event.keyCode === 87 || event.keyCode === 38) { // W ou seta para cima
+                    console.log('UP key detected via alternative method');
+                    this.keys.up = true;
+                } else if (event.key === 's' || event.key === 'S' || event.keyCode === 83 || event.keyCode === 40) { // S ou seta para baixo
+                    console.log('DOWN key detected via alternative method');
+                    this.keys.down = true;
+                } else if (event.key === ' ' || event.keyCode === 32) { // Espaço
+                    console.log('JUMP key detected via alternative method');
+                    const currentTime = performance.now() / 1000;
+                    if (!this.isJumping && (currentTime - this.lastJumpTime) >= this.jumpCooldown) {
+                        this.velocity.y = this.jumpForce;
+                        this.isJumping = true;
+                        this.lastJumpTime = currentTime;
+                        if (this.animations['jump']) {
+                            this.playAnimation('jump');
+                        }
+                    }
+                }
+                break;
         }
     }
 
     onKeyUp(event) {
-        switch (event.key) {
-            case 'a':
+        console.log('Key released:', event.key, event.code);
+        
+        // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
+        switch (event.code) {
+            case 'KeyA':
             case 'ArrowLeft':
+                console.log('LEFT key released');
                 this.keys.left = false;
                 break;
-            case 'd':
+            case 'KeyD':
             case 'ArrowRight':
+                console.log('RIGHT key released');
                 this.keys.right = false;
                 break;
-            case 'w':
+            case 'KeyW':
             case 'ArrowUp':
+                console.log('UP key released');
                 this.keys.up = false;
                 break;
-            case 's':
+            case 'KeyS':
             case 'ArrowDown':
+                console.log('DOWN key released');
                 this.keys.down = false;
+                break;
+            default:
+                // Verificação alternativa para maior compatibilidade
+                if (event.key === 'a' || event.key === 'A' || event.keyCode === 65 || event.keyCode === 37) {
+                    this.keys.left = false;
+                } else if (event.key === 'd' || event.key === 'D' || event.keyCode === 68 || event.keyCode === 39) {
+                    this.keys.right = false;
+                } else if (event.key === 'w' || event.key === 'W' || event.keyCode === 87 || event.keyCode === 38) {
+                    this.keys.up = false;
+                } else if (event.key === 's' || event.key === 'S' || event.keyCode === 83 || event.keyCode === 40) {
+                    this.keys.down = false;
+                }
                 break;
         }
 
@@ -268,10 +401,22 @@ export class Player {
 
     updateMovement() {
         // If mesh isn't loaded yet, don't try to update movement
-        if (!this.mesh) return;
+        if (!this.mesh) {
+            console.log('Cannot update movement: mesh not loaded');
+            return;
+        }
 
-        // If jumping, don't process other movements
-        if (this.isJumping) return;
+        // Se estamos pulando, normalmente não processamos outros movimentos,
+        // mas vamos permitir algum movimento lateral mesmo durante o pulo
+        // para melhorar a jogabilidade
+        let isJumping = this.isJumping;
+
+        // Log estado das teclas para debug
+        const anyKeyPressed = this.keys.up || this.keys.down || this.keys.left || this.keys.right;
+        if (anyKeyPressed && Math.floor(Date.now() / 1000) % 2 === 0) {
+            console.log('Movement keys state:', 
+                `Up: ${this.keys.up}, Down: ${this.keys.down}, Left: ${this.keys.left}, Right: ${this.keys.right}`);
+        }
 
         this.movementDirection.set(0, 0, 0);
 
@@ -287,20 +432,36 @@ export class Player {
         cameraRight.y = 0;
         cameraRight.normalize();
 
+        // Aplicar movimentos baseados no estado das teclas
         if (this.keys.up) this.movementDirection.add(cameraForward);
         if (this.keys.down) this.movementDirection.sub(cameraForward);
         if (this.keys.right) this.movementDirection.add(cameraRight);
         if (this.keys.left) this.movementDirection.sub(cameraRight);
 
+        // Verificar se há alguma direção de movimento
         if (this.movementDirection.length() > 0) {
+            console.log('Moving player in direction: ', 
+                this.movementDirection.x.toFixed(2), 
+                this.movementDirection.y.toFixed(2), 
+                this.movementDirection.z.toFixed(2));
+            
             this.movementDirection.normalize();
             
             // Store previous position
             const previousPosition = this.mesh.position.clone();
 
+            // Calcular velocidade baseada no estado (pulando ou normal)
+            const currentSpeed = isJumping ? this.moveSpeed * 0.7 : this.moveSpeed;
+            
             // Apply movement
-            this.mesh.position.x += this.movementDirection.x * this.moveSpeed;
-            this.mesh.position.z += this.movementDirection.z * this.moveSpeed;
+            this.mesh.position.x += this.movementDirection.x * currentSpeed;
+            this.mesh.position.z += this.movementDirection.z * currentSpeed;
+
+            // Log a posição para debug
+            console.log('Player position: ', 
+                this.mesh.position.x.toFixed(2), 
+                this.mesh.position.y.toFixed(2), 
+                this.mesh.position.z.toFixed(2));
 
             // Rotate player to face movement direction
             const targetRotation = Math.atan2(this.movementDirection.x, this.movementDirection.z);
@@ -308,20 +469,40 @@ export class Player {
 
             // Check for collisions
             if (this.checkCollisions()) {
+                console.log('Collision detected, reverting to previous position');
                 this.mesh.position.copy(previousPosition);
             }
 
             // Reset idle timer and play run animation only if not jumping
             this.idleTimer = 0;
-            if (!this.isJumping && this.animations['run']) {
+            if (!isJumping && this.animations['run']) {
                 this.playAnimation('run');
             }
+        } else if (anyKeyPressed) {
+            // Se teclas estão pressionadas mas não há movimento, isto é um erro
+            console.warn('Keys are pressed but no movement is being calculated!');
         }
     }
 
     update(deltaTime) {
+        // Verificação inicial - se o jogador não estiver habilitado, não atualize nada
+        if (!this.enabled) {
+            return;
+        }
+
         // If mesh isn't loaded yet, don't try to update
-        if (!this.mesh) return;
+        if (!this.mesh) {
+            console.log('Player mesh not found, cannot update');
+            return;
+        }
+
+        // Log se o Pointer Lock não estiver ativo mas não bloquear o movimento
+        if (!this.isPointerLocked && this.enabled) {
+            // Apenas logar uma vez por segundo para não sobrecarregar o console
+            if (Math.floor(Date.now() / 1000) % 3 === 0) {
+                console.log('Moving without pointer lock - camera rotation will be limited');
+            }
+        }
 
         // Update animation mixer
         if (this.mixer) {
@@ -330,7 +511,7 @@ export class Player {
         }
 
         // Update idle timer if player is not moving and not jumping and not on ladder
-        if (!this.isMoving() && !this.onLadder) {
+        if (!this.isMoving() && !this.isJumping && !this.onLadder) {
             this.idleTimer += deltaTime;
             
             // If we've been still for 10 seconds, play main idle animation
@@ -354,7 +535,6 @@ export class Player {
 
         // Check if we're on a ladder
         const ladderCheck = this.checkLadderCollision(this.mesh.position);
-        const wasOnLadder = this.onLadder;
         
         if (ladderCheck.isOnLadder && !this.onLadder && 
             (this.keys.up || this.keys.down)) {
@@ -381,9 +561,27 @@ export class Player {
 
         // Update camera
         this.updateCameraPosition();
+
+        // DEBUG: Logging key state occasionally to verify input
+        if (Math.floor(Date.now() / 1000) % 5 === 0) {
+            if (this.isMoving()) {
+                console.log('Keys pressed:', 
+                    (this.keys.up ? 'UP ' : '') + 
+                    (this.keys.down ? 'DOWN ' : '') + 
+                    (this.keys.left ? 'LEFT ' : '') + 
+                    (this.keys.right ? 'RIGHT ' : '')
+                );
+            }
+        }
     }
 
     updateCameraPosition() {
+        // Se o jogador ou a câmera não existem, não fazer nada
+        if (!this.mesh || !this.camera) {
+            console.warn('updateCameraPosition: Player mesh or camera not available.');
+            return;
+        }
+
         // Calculate camera rotation based on mouse input
         const rotation = new THREE.Euler(
             this.cameraRotation.x,
@@ -401,11 +599,15 @@ export class Player {
         offset.applyEuler(rotation);
         
         // Set camera position and rotation
-        this.camera.position.copy(this.mesh.position).add(offset);
+        const targetPosition = this.mesh.position.clone().add(offset);
+        this.camera.position.copy(targetPosition);
         this.camera.rotation.copy(rotation);
 
         // Add a slightly stronger tilt to the camera to see the path ahead better
         this.camera.rotation.x -= 0.2;
+        
+        // Log camera position for debugging
+        // console.log(`Camera Position: X=${this.camera.position.x.toFixed(2)}, Y=${this.camera.position.y.toFixed(2)}, Z=${this.camera.position.z.toFixed(2)}`);
     }
 
     checkCollisions() {
@@ -575,15 +777,90 @@ export class Player {
 
     // Add new method to enable controls
     enableControls() {
-        if (!document.pointerLockElement) {
-            document.body.requestPointerLock();
+        console.log('Enabling player controls forcefully...');
+        this.enabled = true; // Definir como habilitado
+        
+        // Adicionar handler de teclas direto ao documento
+        this.handleKeyPress = (e) => {
+            if (e.type === 'keydown') {
+                this.onKeyDown(e);
+            } else if (e.type === 'keyup') {
+                this.onKeyUp(e);
+            }
+        };
+        
+        // Adicionar os event listeners
+        document.addEventListener('keydown', this.handleKeyPress);
+        document.addEventListener('keyup', this.handleKeyPress);
+        
+        try {
+            console.log('Attempting to enable pointer lock...');
+            
+            // Verificar se já existe uma instrução na tela
+            if (document.getElementById('pointer-lock-instruction')) {
+                console.log('Instruction element already exists, not creating a new one');
+                return;
+            }
+            
+            if (!document.pointerLockElement) {
+                // Exibir instrução de clique para o usuário
+                const instruction = document.createElement('div');
+                instruction.id = 'pointer-lock-instruction';
+                instruction.style.position = 'fixed';
+                instruction.style.top = '50%';
+                instruction.style.left = '50%';
+                instruction.style.transform = 'translate(-50%, -50%)';
+                instruction.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                instruction.style.color = 'white';
+                instruction.style.padding = '20px';
+                instruction.style.fontFamily = "'Press Start 2P', monospace";
+                instruction.style.zIndex = '10000';
+                instruction.style.textAlign = 'center';
+                instruction.innerHTML = 'CLIQUE NA TELA PARA JOGAR<br><br>Use WASD para mover<br>Espaço para pular';
+                
+                document.body.appendChild(instruction);
+                
+                // Adicionar event listener para o documento inteiro
+                const requestPointerLock = () => {
+                    document.body.requestPointerLock();
+                    
+                    // Remover a instrução e o listener após o clique
+                    const instructionElement = document.getElementById('pointer-lock-instruction');
+                    if (instructionElement) {
+                        instructionElement.remove();
+                    }
+                    document.removeEventListener('click', requestPointerLock);
+                };
+                
+                document.addEventListener('click', requestPointerLock);
+            }
+        } catch (error) {
+            console.error('Error enabling pointer lock:', error);
         }
     }
 
     // Add new method to disable controls
     disableControls() {
+        this.enabled = false; // Definir como desabilitado
+        console.log('Disabling player controls...');
+        
+        // Remover os event listeners de teclado
+        if (this.handleKeyPress) {
+            document.removeEventListener('keydown', this.handleKeyPress);
+            document.removeEventListener('keyup', this.handleKeyPress);
+            console.log('Keyboard event handlers removed');
+        }
+        
         if (document.pointerLockElement === document.body) {
             document.exitPointerLock();
+            console.log('Pointer lock exited');
+        }
+        
+        // Remover a instrução de clique, se existir
+        const instruction = document.getElementById('pointer-lock-instruction');
+        if (instruction) {
+            instruction.remove();
+            console.log('Instruction element removed');
         }
     }
 

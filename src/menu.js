@@ -122,7 +122,7 @@ export class GameMenu {
         const credits = document.createElement('div');
         credits.innerHTML = `
             <div style="text-align: center; color: #00bfff; font-size: 14px;">
-                RICARDO FREITAS<br>
+                RICARDO FREITAS<br> Rodrigo Venâncio<br> Alexandre Ferreira<br> 
                 © 2025
             </div>
         `;
@@ -193,10 +193,27 @@ export class GameMenu {
     selectCurrentOption() {
         switch (this.currentSelection) {
             case 0: // PLAY
+                console.log('Player selected PLAY option');
+                
+                // Garantir que o canvas do jogo está visível primeiro
+                if (this.game && this.game.renderer) {
+                    const canvas = this.game.renderer.domElement;
+                    canvas.style.display = 'block';
+                    canvas.style.zIndex = '0';
+                    
+                    // Renderizar um frame para verificar se está funcionando
+                    if (this.game.scene && this.game.camera) {
+                        console.log('Forçando renderização inicial');
+                        this.game.renderer.render(this.game.scene, this.game.camera);
+                    }
+                }
+                
+                // Agora esconder o menu e iniciar o jogo
                 this.hideMenu();
                 this.initializeGame();
                 break;
             case 1: // OPTIONS
+                console.log('Player selected OPTIONS');
                 this.showOptionsMenu();
                 break;
         }
@@ -382,11 +399,20 @@ export class GameMenu {
         try {
             console.log('Iniciando processo de inicialização do jogo...');
             
+            // Inicializar o canvas do jogo
+            const canvas = this.game.renderer ? this.game.renderer.domElement : null;
+            
             // Initialize the game scene first
             if (!this.game.scene) {
                 console.log('Inicializando cena do jogo...');
                 await this.game.init();
                 console.log('Cena inicializada com sucesso');
+            }
+            
+            // Garantir que o canvas está visível
+            if (this.game.renderer && this.game.renderer.domElement) {
+                this.game.renderer.domElement.style.display = 'block';
+                this.game.renderer.domElement.style.zIndex = '1';
             }
 
             console.log('Inicializando nível e jogador...');
@@ -402,23 +428,43 @@ export class GameMenu {
                 this.game.player = new Player(this.game.scene, this.game.camera);
                 console.log('Jogador criado, aguardando carregamento do modelo...');
                 
-                // Esperar o modelo do jogador carregar
-                await new Promise((resolve) => {
+                // Esperar o modelo do jogador carregar com timeout
+                let loadingAttempts = 0;
+                const maxAttempts = 30; // 3 segundos máximo
+                
+                await new Promise((resolve, reject) => {
                     const checkLoaded = () => {
                         if (this.game.player.isLoaded) {
                             console.log('Modelo do jogador carregado com sucesso');
                             resolve();
                         } else {
-                            console.log('Aguardando carregamento do modelo...');
-                            setTimeout(checkLoaded, 100);
+                            loadingAttempts++;
+                            console.log(`Aguardando carregamento do modelo... (Tentativa ${loadingAttempts}/${maxAttempts})`);
+                            
+                            if (loadingAttempts >= maxAttempts) {
+                                console.error('Tempo limite excedido para carregar o modelo do jogador');
+                                reject(new Error('Tempo limite excedido para carregar o modelo do jogador'));
+                            } else {
+                                setTimeout(checkLoaded, 100);
+                            }
                         }
                     };
                     checkLoaded();
                 });
             }
 
+            // Garantir que o jogo está visível
+            if (this.game.scene) {
+                this.game.scene.visible = true;
+            }
+            
+            // Forçar uma renderização para garantir que algo seja mostrado
+            if (this.game.renderer && this.game.scene && this.game.camera) {
+                this.game.renderer.render(this.game.scene, this.game.camera);
+            }
+
             // Set player to idle animation and initial position
-            if (this.game.player.animations['idle']) {
+            if (this.game.player && this.game.player.animations['idle']) {
                 console.log('Iniciando animação idle...');
                 this.game.player.playAnimation('idle');
             }
@@ -456,6 +502,13 @@ export class GameMenu {
     hideMenu() {
         if (this.menuContainer) {
             this.menuContainer.style.display = 'none';
+        }
+        
+        // Garantir que o canvas do jogo está visível
+        if (this.game && this.game.renderer) {
+            const canvas = this.game.renderer.domElement;
+            canvas.style.display = 'block';
+            canvas.style.zIndex = '0';
         }
     }
 
@@ -622,6 +675,14 @@ export class GameMenu {
 
     showPauseMenu() {
         console.log('Showing pause menu...');
+        
+        // Remover qualquer instrução de clique existente
+        const instruction = document.getElementById('pointer-lock-instruction');
+        if (instruction) {
+            instruction.remove();
+            console.log('Removing instruction before showing pause menu');
+        }
+        
         if (this.pauseMenu) {
             // Ensure the menu is in the DOM
             if (!document.body.contains(this.pauseMenu)) {
@@ -659,6 +720,14 @@ export class GameMenu {
     }
 
     resumeGame() {
+        // Remover qualquer instrução de clique existente
+        const instruction = document.getElementById('pointer-lock-instruction');
+        if (instruction) {
+            instruction.remove();
+            console.log('Removing instruction before resuming game');
+        }
+        
+        // Resumir o jogo
         this.game.resume();
     }
 
