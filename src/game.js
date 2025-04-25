@@ -145,6 +145,17 @@ export class Game {
         try {
             console.log('Starting countdown sequence...');
             
+            // Criar background temporário preto durante a contagem
+            const tempBackground = document.createElement('div');
+            tempBackground.style.position = 'fixed';
+            tempBackground.style.top = '0';
+            tempBackground.style.left = '0';
+            tempBackground.style.width = '100%';
+            tempBackground.style.height = '100%';
+            tempBackground.style.backgroundColor = 'black';
+            tempBackground.style.zIndex = '500'; // Entre o jogo (0) e o contador (1000)
+            document.body.appendChild(tempBackground);
+            
             if (!this.countdownElement) {
                 console.log('Creating countdown element...');
                 this.createCountdownElement();
@@ -168,6 +179,9 @@ export class Game {
             this.countdownElement.textContent = 'GO!';
             await new Promise(resolve => setTimeout(resolve, 1000));
             this.countdownElement.style.display = 'none';
+            
+            // Remover o background temporário
+            document.body.removeChild(tempBackground);
 
             console.log('Countdown complete, starting gameplay...');
             // Now start the actual game
