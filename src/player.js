@@ -634,25 +634,31 @@ export class Player {
     }
 
     checkLadderCollision(position) {
-        // Create a narrower collision box for more precise ladder detection
+        // Create a wider collision box for more permissive ladder detection
         const ladderCollider = new THREE.Box3();
-        const playerSize = new THREE.Vector3(0.6, 2, 0.4); // Narrower and thinner hitbox
-        ladderCollider.setFromCenterAndSize(position, playerSize);
+        const playerSize = new THREE.Vector3(2.0, 2.0, 2.0); // Maior área de detecção
+        ladderCollider.setFromCenterAndSize(position.clone().add(new THREE.Vector3(0, 1, 0)), playerSize);
 
         let isOnLadder = false;
         let floorIndex = -1;
+        let ladderPosition = null;
 
+        // Debug hitbox visualization
         this.scene.children.forEach(child => {
             if (child.userData.isLadder) {
                 const ladderBox = new THREE.Box3().setFromObject(child);
                 if (ladderCollider.intersectsBox(ladderBox)) {
                     isOnLadder = true;
                     floorIndex = child.userData.floorIndex;
+                    ladderPosition = child.position.clone();
+                    
+                    // Log debug info
+                    console.log(`Ladder detected! Floor: ${floorIndex}, Position: ${ladderPosition.x.toFixed(2)}, ${ladderPosition.y.toFixed(2)}, ${ladderPosition.z.toFixed(2)}`);
                 }
             }
         });
 
-        return { isOnLadder, floorIndex };
+        return { isOnLadder, floorIndex, ladderPosition };
     }
 
     onDeath() {
@@ -675,70 +681,119 @@ export class Player {
         this.velocity.y = 0;
         this.isJumping = false;
 
-        let moved = false;
+        // Get updated ladder info
+        const ladderInfo = this.checkLadderCollision(this.mesh.position);
+        
+        // If we've somehow lost track of the ladder, try to recover
+        if (!ladderInfo.isOnLadder || !ladderInfo.ladderPosition) {
+            console.log("Lost track of ladder, trying to recover...");
+            this.onLadder = false;
+            return;
+        }
+        
+        // Log when starting to climb
+        console.log("Climbing ladder...");
 
         // Rotate player to face forward when on ladder
         const targetRotation = Math.PI; // Face forward
         this.mesh.rotation.y = targetRotation;
 
-        // Adjust position relative to ladder
-        const ladderOffset = 0.4; // Distance from ladder
-        this.mesh.position.z = Math.round(this.mesh.position.z); // Snap to nearest integer Z position
-        this.mesh.position.x = 0.4; // Slight offset to the right of ladder center
+        // Snap position to ladder center for better climbing
+        this.mesh.position.x = 0;
+        this.mesh.position.z = ladderInfo.ladderPosition.z;
 
-        // Stop any current animations when on ladder
-        if (this.currentAnimation) {
+        // Play climbing animation if we have one (or stop current animation)
+        if (this.currentAnimation && this.currentAnimation !== 'climb') {
             const current = this.animations[this.currentAnimation];
             current.stop();
             this.currentAnimation = null;
         }
 
-        // Vertical movement on ladder with reduced speed
+        // Vertical movement on ladder - increased speed for better responsiveness
+        const climbSpeedAdjusted = this.climbSpeed * 2.0; // Double the climb speed
+        
         if (this.keys.up) {
-            this.mesh.position.y += this.climbSpeed;
-            moved = true;
+            console.log("Climbing up");
+            this.mesh.position.y += climbSpeedAdjusted;
+            
+            // Debug info
+            console.log(`New Y position: ${this.mesh.position.y.toFixed(2)}`);
         } else if (this.keys.down) {
-            this.mesh.position.y -= this.climbSpeed;
-            moved = true;
+            console.log("Climbing down");
+            this.mesh.position.y -= climbSpeedAdjusted;
+            
+            // Debug info
+            console.log(`New Y position: ${this.mesh.position.y.toFixed(2)}`);
         }
 
-        // Check if we're still on the ladder
-        const newLadderCheck = this.checkLadderCollision(this.mesh.position);
-        if (!newLadderCheck.isOnLadder) {
-            const floorY = Math.floor(this.mesh.position.y / this.floorHeight) * this.floorHeight + 1.25;
-            if (Math.abs(this.mesh.position.y - floorY) > 0.5) {
-                this.mesh.position.copy(previousPosition);
-                this.onLadder = true;
-            } else {
-                this.onLadder = false;
-                if (this.animations['idle']) {
-                    this.playAnimation('idle');
-                }
+        // Check if we've reached the top or bottom of the ladder
+        const floorY = ladderInfo.floorIndex * this.floorHeight;
+        const nextFloorY = (ladderInfo.floorIndex + 1) * this.floorHeight;
+        
+        // If we've reached the next floor and trying to go up, get off the ladder
+        if (this.mesh.position.y >= nextFloorY - 0.5 && this.keys.up) {
+            console.log("Reached top of ladder");
+            this.mesh.position.y = nextFloorY + 1.0; // Place slightly above floor
+            this.currentFloor = ladderInfo.floorIndex + 1;
+            this.onLadder = false;
+            
+            if (this.animations['idle2']) {
+                this.playAnimation('idle2');
             }
+            return;
+        }
+        
+        // If we've reached the bottom of the ladder and trying to go down, get off ladder
+        if (this.mesh.position.y <= floorY + 1.0 && this.keys.down) {
+            console.log("Reached bottom of ladder");
+            this.mesh.position.y = floorY + 1.0; // Place on floor
+            this.currentFloor = ladderInfo.floorIndex;
+            this.onLadder = false;
+            
+            if (this.animations['idle2']) {
+                this.playAnimation('idle2');
+            }
+            return;
         }
 
-        // Handle jumping off ladder with reduced force
+        // Handle jumping off ladder (with reduced force)
         if (this.keys.space) {
             this.onLadder = false;
             this.velocity.y = this.jumpForce * 0.6;
             this.isJumping = true;
+            
+            // Make sure we're still on the right floor
+            const currentFloorHeight = Math.floor(this.mesh.position.y / this.floorHeight);
+            this.currentFloor = currentFloorHeight;
+            
             if (this.animations['jump']) {
                 this.playAnimation('jump');
             }
         }
 
-        // Handle horizontal movement with reduced step off
+        // Handle horizontal movement off the ladder
         if (this.keys.left || this.keys.right) {
-            const stepOff = 0.4;
-            const newPosition = this.mesh.position.clone();
-            newPosition.x += (this.keys.left ? -stepOff : stepOff);
+            // Determine if we're close enough to a floor to step off
+            const currentHeight = this.mesh.position.y;
+            const nearestFloorY = Math.round(currentHeight / this.floorHeight) * this.floorHeight + 1.0;
             
-            const floorY = Math.floor(this.mesh.position.y / this.floorHeight) * this.floorHeight + 1.25;
-            if (Math.abs(this.mesh.position.y - floorY) < 0.5) {
-                this.mesh.position.copy(newPosition);
+            if (Math.abs(currentHeight - nearestFloorY) < 1.0) {
+                console.log("Stepping off ladder to floor level:", Math.round(nearestFloorY / this.floorHeight));
+                
+                // Set the proper Y position for the floor
+                this.mesh.position.y = nearestFloorY;
+                
+                // Step off in the direction pressed
+                this.mesh.position.x = this.keys.left ? -2.0 : 2.0;
+                
+                // Update floor
+                this.currentFloor = Math.round(nearestFloorY / this.floorHeight);
+                
+                // We're no longer on the ladder
                 this.onLadder = false;
-                if (this.animations['idle']) {
-                    this.playAnimation('idle');
+                
+                if (this.animations['idle2']) {
+                    this.playAnimation('idle2');
                 }
             }
         }
@@ -760,7 +815,7 @@ export class Player {
         this.mesh.position.y += this.velocity.y;
 
         // Ground collision
-        const floorY = this.currentFloor * this.floorHeight + 1.25;
+        const floorY = this.currentFloor * this.floorHeight + 1.0; // Ajustado de 1.25 para 1.0 para corrigir a flutuação
         if (this.mesh.position.y < floorY) {
             this.mesh.position.y = floorY;
             this.velocity.y = 0;

@@ -40,22 +40,13 @@ export class Level {
     }
 
     createEnvironment() {
-        // Create background
-        const loader = new THREE.TextureLoader();
-        const bgTexture = loader.load('/textures/arcade-background.jpg');
-        const skyGeometry = new THREE.BoxGeometry(600, 200, 400);
-        const skyMaterial = new THREE.MeshBasicMaterial({
-            map: bgTexture,
-            side: THREE.BackSide
-        });
-        const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-        sky.position.z = this.floorLength / 2;
-        this.scene.add(sky);
-
+        // Cor de fundo totalmente preta como no arcade original
+        this.scene.background = new THREE.Color(0x000000);
+        
         // Create ground
         const groundGeometry = new THREE.PlaneGeometry(400, this.floorLength * 2);
         const groundMaterial = new THREE.MeshPhongMaterial({
-            color: 0x808080,
+            color: 0x000000, // Fundo preto
             side: THREE.DoubleSide
         });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -124,17 +115,24 @@ export class Level {
     }
 
     createFloors() {
+        // Cor do piso mais próxima do Donkey Kong original
+        const floorPinkColor = 0xE80053; // Rosa/vermelho mais próximo do original
+        
         for (let floor = 0; floor < this.numFloors; floor++) {
-            // Create main floor platform
-            const floorGeometry = new THREE.BoxGeometry(this.boundaryWidth, 1, this.floorLength);
+            // Criar plataforma principal mais alta
+            const floorGeometry = new THREE.BoxGeometry(this.boundaryWidth, 2, this.floorLength);
+            
+            // Material para o piso com cor rosa/vermelho do Donkey Kong original
             const floorMaterial = new THREE.MeshPhongMaterial({ 
-                color: 0x8B4513,
-                metalness: 0.2,
-                roughness: 0.8
+                color: floorPinkColor,
+                metalness: 0.1,
+                roughness: 0.8,
+                shininess: 30
             });
+            
             const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
             
-            // Position floor to align with boundaries
+            // Posição ajustada para evitar que o personagem flutue
             floorMesh.position.set(
                 0,
                 floor * this.floorHeight,
@@ -144,134 +142,224 @@ export class Level {
             this.floors.push(floorMesh);
             this.scene.add(floorMesh);
 
-            // Create lane dividers (visual only)
-            for (let lane = -1; lane <= 1; lane++) {
-                if (lane === 0) continue;
-                const dividerGeometry = new THREE.PlaneGeometry(0.1, this.floorLength);
-                const dividerMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0xFFFFFF,
-                    side: THREE.DoubleSide,
-                    transparent: true,
-                    opacity: 0.7
+            // Alternância de direção para cada andar (como no jogo original)
+            const isRightToLeft = floor % 2 === 1;
+            
+            // Adicionar linhas horizontais no estilo Donkey Kong original
+            // (mais espaçadas para o visual "girder")
+            const numBeams = Math.floor(this.floorLength / 7);
+            for (let i = 0; i < numBeams; i++) {
+                const beamGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.3, 0.7);
+                const beamMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0xBC0045, // Vermelho mais escuro para as linhas
                 });
-                const divider = new THREE.Mesh(dividerGeometry, dividerMaterial);
+                const beam = new THREE.Mesh(beamGeometry, beamMaterial);
                 
-                divider.rotation.x = -Math.PI / 2;
-                divider.position.set(
-                    lane * this.laneWidth,
-                    floor * this.floorHeight + 0.01,
-                    this.floorLength / 2
+                beam.position.set(
+                    0,
+                    floor * this.floorHeight + 1.1, // Acima do piso
+                    i * 7 + 3.5 // Distribuição uniforme ao longo do comprimento
                 );
                 
-                this.scene.add(divider);
+                this.scene.add(beam);
             }
+            
+            // Adicionar detalhes laterais para cada piso
+            const sideDetailGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.5, this.floorLength);
+            const sideDetailMaterial = new THREE.MeshPhongMaterial({
+                color: 0xBC0045, // Vermelho mais escuro
+                metalness: 0.1,
+                roughness: 0.8
+            });
+            
+            // Detalhe inferior
+            const lowerDetail = new THREE.Mesh(sideDetailGeometry, sideDetailMaterial);
+            lowerDetail.position.set(
+                0,
+                floor * this.floorHeight - 0.7,
+                this.floorLength / 2
+            );
+            this.scene.add(lowerDetail);
+            
+            // Adicionar setas direcionais no chão para indicar o fluxo (como no jogo original)
+            this.addDirectionalMarkers(floor, isRightToLeft);
+        }
+        
+        // Adicionar paredes laterais visíveis
+        this.createWalls();
+    }
 
-            // Add subtle lane coloring for better visibility
-            for (let lane = -1; lane <= 2; lane++) {
-                const laneGeometry = new THREE.PlaneGeometry(this.laneWidth * 0.9, this.floorLength);
-                const laneMaterial = new THREE.MeshPhongMaterial({
-                    color: lane % 2 === 0 ? 0x8B4513 : 0x9B5523,
-                    side: THREE.DoubleSide,
-                    transparent: true,
-                    opacity: 0.3
-                });
-                const laneMesh = new THREE.Mesh(laneGeometry, laneMaterial);
-                
-                laneMesh.rotation.x = -Math.PI / 2;
-                laneMesh.position.set(
-                    (lane - 0.5) * this.laneWidth,
-                    floor * this.floorHeight + 0.02,
-                    this.floorLength / 2
-                );
-                
-                this.scene.add(laneMesh);
+    // Novo método para adicionar indicadores de direção no chão
+    addDirectionalMarkers(floor, isRightToLeft) {
+        const y = floor * this.floorHeight + 1.05;
+        const markerSize = 3;
+        const spacing = 30;
+        
+        // Número de marcadores a serem colocados
+        const numMarkers = Math.floor(this.floorLength / spacing) - 1;
+        
+        for (let i = 1; i <= numMarkers; i++) {
+            const z = i * spacing;
+            
+            // Criar geometria para a seta direcional
+            const arrowGeometry = new THREE.PlaneGeometry(markerSize, markerSize);
+            const arrowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide
+            });
+            
+            const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+            
+            // Posicionar e rotacionar a seta de acordo com a direção do andar
+            arrow.rotation.x = -Math.PI / 2; // Apontar para cima
+            
+            if (isRightToLeft) {
+                // Seta apontando para esquerda
+                arrow.position.set(markerSize, y, z);
+            } else {
+                // Seta apontando para direita
+                arrow.position.set(-markerSize, y, z);
             }
+            
+            this.scene.add(arrow);
         }
     }
 
+    createWalls() {
+        // Cor das paredes laterais (preto para combinar com o fundo)
+        const wallColor = 0x000000;
+        
+        // Altura total de todas as plataformas
+        const totalHeight = this.numFloors * this.floorHeight;
+        
+        // Paredes laterais (esquerda e direita)
+        const sideWallGeometry = new THREE.BoxGeometry(2, totalHeight, this.floorLength);
+        const sideWallMaterial = new THREE.MeshPhongMaterial({ 
+            color: wallColor,
+            transparent: true,
+            opacity: 0.7
+        });
+        
+        // Parede esquerda
+        const leftWall = new THREE.Mesh(sideWallGeometry, sideWallMaterial);
+        leftWall.position.set(
+            -this.boundaryWidth/2 - 1, // Fora da área jogável
+            totalHeight/2,             // Centro vertical
+            this.floorLength/2         // Centro do comprimento
+        );
+        this.scene.add(leftWall);
+        
+        // Parede direita
+        const rightWall = new THREE.Mesh(sideWallGeometry, sideWallMaterial);
+        rightWall.position.set(
+            this.boundaryWidth/2 + 1,  // Fora da área jogável
+            totalHeight/2,             // Centro vertical
+            this.floorLength/2         // Centro do comprimento
+        );
+        this.scene.add(rightWall);
+        
+        // Paredes de fundo e frente
+        const endWallGeometry = new THREE.BoxGeometry(this.boundaryWidth + 4, totalHeight, 2);
+        const endWallMaterial = new THREE.MeshPhongMaterial({ 
+            color: wallColor,
+            transparent: true,
+            opacity: 0.7
+        });
+        
+        // Parede do fundo
+        const backWall = new THREE.Mesh(endWallGeometry, endWallMaterial);
+        backWall.position.set(
+            0,                     // Centro horizontal
+            totalHeight/2,         // Centro vertical
+            this.floorLength + 1   // Além do fim da plataforma
+        );
+        this.scene.add(backWall);
+        
+        // Parede da frente
+        const frontWall = new THREE.Mesh(endWallGeometry, endWallMaterial);
+        frontWall.position.set(
+            0,                     // Centro horizontal
+            totalHeight/2,         // Centro vertical
+            -1                     // Antes do início da plataforma
+        );
+        this.scene.add(frontWall);
+    }
+
     createStairs() {
-        const ladderWidth = 1.2;
-        const rungSpacing = 0.4;
+        const ladderWidth = 1.5;
         const ladderDepth = 0.2;
-
-        // Define ladder positions for each floor with much wider spacing
-        const ladderPositions = [
-            { floor: 0, x: 0, z: this.floorLength * 0.10 },     // First floor ladder at 10%
-            { floor: 1, x: 0, z: this.floorLength * 0.95 },     // Second floor ladder at 95%
-            { floor: 2, x: 0, z: this.floorLength * 0.15 },     // Third floor ladder at 15%
-            { floor: 3, x: 0, z: this.floorLength * 0.85 }      // Fourth floor ladder at 85%
-        ];
-
-        for (let ladderInfo of ladderPositions) {
-            const floor = ladderInfo.floor;
-            const startY = floor * this.floorHeight;
+        const rungSpacing = 1.5;
+        
+        // Cores das escadas no estilo Donkey Kong original
+        const ladderSideColor = 0x29ADFF; // Azul claro/médio para as laterais
+        const ladderRungColor = 0x29ADFF; // Mesma cor para os degraus
+        
+        // Use as posições de escada definidas no construtor
+        this.ladderPositions.forEach(position => {
+            const floorY = position.floor * this.floorHeight;
             const ladderHeight = this.floorHeight;
-            const numRungs = Math.floor(ladderHeight / rungSpacing);
-
-            // Create ladder sides (vertical poles)
-            const poleGeometry = new THREE.CylinderGeometry(0.05, 0.05, ladderHeight, 8);
-            const poleMaterial = new THREE.MeshPhongMaterial({ 
-                color: 0x8B4513,
-                metalness: 0.3,
-                roughness: 0.7
-            });
-
-            // Left pole
-            const leftPole = new THREE.Mesh(poleGeometry, poleMaterial);
-            leftPole.position.set(
-                ladderInfo.x - ladderWidth/2,
-                startY + ladderHeight/2,
-                ladderInfo.z
-            );
-            this.scene.add(leftPole);
-
-            // Right pole
-            const rightPole = new THREE.Mesh(poleGeometry, poleMaterial);
-            rightPole.position.set(
-                ladderInfo.x + ladderWidth/2,
-                startY + ladderHeight/2,
-                ladderInfo.z
-            );
-            this.scene.add(rightPole);
-
-            // Create rungs
-            for (let i = 0; i < numRungs; i++) {
-                const rungGeometry = new THREE.CylinderGeometry(0.03, 0.03, ladderWidth + 0.1, 8);
-                const rungMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0x8B4513,
-                    metalness: 0.3,
-                    roughness: 0.7
+            
+            // Criar as laterais da escada
+            for (let side = -1; side <= 1; side += 2) {
+                const sideGeometry = new THREE.BoxGeometry(0.15, ladderHeight, ladderDepth);
+                const sideMaterial = new THREE.MeshPhongMaterial({ 
+                    color: ladderSideColor,
+                    emissive: 0x003366, // Brilho azul profundo
+                    emissiveIntensity: 0.2
                 });
-                const rung = new THREE.Mesh(rungGeometry, rungMaterial);
+                const sideMesh = new THREE.Mesh(sideGeometry, sideMaterial);
                 
-                rung.rotation.z = Math.PI / 2;
-                rung.position.set(
-                    ladderInfo.x,
-                    startY + (i + 0.5) * rungSpacing,
-                    ladderInfo.z
+                sideMesh.position.set(
+                    side * (ladderWidth / 2),
+                    floorY + ladderHeight / 2,
+                    position.z
                 );
                 
-                this.scene.add(rung);
+                this.scene.add(sideMesh);
             }
-
-            // Create invisible ladder collision box
-            const ladderColliderGeometry = new THREE.BoxGeometry(ladderWidth, ladderHeight, ladderDepth);
-            const ladderColliderMaterial = new THREE.MeshBasicMaterial({
+            
+            // Criar os degraus da escada
+            const numRungs = Math.floor(ladderHeight / rungSpacing);
+            for (let i = 0; i < numRungs; i++) {
+                const rungGeometry = new THREE.BoxGeometry(ladderWidth, 0.15, ladderDepth);
+                const rungMaterial = new THREE.MeshPhongMaterial({ 
+                    color: ladderRungColor,
+                    emissive: 0x003366, // Brilho azul profundo
+                    emissiveIntensity: 0.2
+                });
+                const rungMesh = new THREE.Mesh(rungGeometry, rungMaterial);
+                
+                rungMesh.position.set(
+                    0,
+                    floorY + (i * rungSpacing) + (rungSpacing / 2),
+                    position.z
+                );
+                
+                this.scene.add(rungMesh);
+            }
+            
+            // Adicionar hitbox para detecção de colisão
+            const hitboxGeometry = new THREE.BoxGeometry(ladderWidth, ladderHeight, 1);
+            const hitboxMaterial = new THREE.MeshBasicMaterial({
                 transparent: true,
                 opacity: 0.0
             });
-            const ladderCollider = new THREE.Mesh(ladderColliderGeometry, ladderColliderMaterial);
             
-            ladderCollider.position.set(
-                ladderInfo.x,
-                startY + ladderHeight/2,
-                ladderInfo.z
+            const hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
+            hitbox.position.set(
+                0,
+                floorY + ladderHeight / 2,
+                position.z
             );
             
-            ladderCollider.userData.isLadder = true;
-            ladderCollider.userData.floorIndex = floor;
-            this.scene.add(ladderCollider);
-        }
+            hitbox.userData.isLadder = true;
+            hitbox.userData.floorIndex = position.floor;
+            
+            this.stairs.push(hitbox);
+            this.scene.add(hitbox);
+        });
     }
 
     createDonkeyKong() {
@@ -406,25 +494,129 @@ export class Level {
     }
 
     createBarrel() {
-        const geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.6, 12);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x8b4513,
-            roughness: 0.8,
-            metalness: 0.2
+        // Create the barrel with a single cylinder with more segments for smoothness
+        const segments = 32;
+        const radiusTop = 1.4;
+        const radiusBottom = 1.4;
+        const height = 2.8;  // Altura reduzida para combinar melhor com o ambiente
+        const heightSegments = 16;
+        
+        const geometry = new THREE.CylinderGeometry(
+            radiusTop,
+            radiusBottom,
+            height,
+            segments,
+            heightSegments,
+            false
+        );
+
+        // Bulge out the middle vertices with smoother transition
+        const middleRadius = 1.8;  
+        const positions = geometry.attributes.position.array;
+        for (let i = 0; i < positions.length; i += 3) {
+            const y = positions[i + 1];
+            const heightFactor = y / (height / 2);
+            const smoothFactor = 1 - Math.pow(heightFactor, 4);
+            const bulge = 1 + smoothFactor * (middleRadius/radiusTop - 1);
+            positions[i] *= bulge;
+            positions[i + 2] *= bulge;
+        }
+        geometry.computeVertexNormals();
+        
+        // Material mais metálico vermelho escuro
+        const material = new THREE.MeshPhongMaterial({ 
+            color: 0xC00000,  // Vermelho mais escuro
+            specular: 0x555555,
+            shininess: 30
         });
+
         const barrel = new THREE.Mesh(geometry, material);
+
+        // Position barrel at the stairs on the top floor
+        const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
+        const spawnZ = this.floorLength * 0.15;
+        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
+        barrel.position.set(spawnX, spawnY, spawnZ);
+
+        // Add properties for movement
+        barrel.userData.floor = this.numFloors - 1;
+        barrel.userData.speed = 70; // Velocidade aumentada para movimento mais rápido
+        barrel.userData.rotationSpeed = 8;
+        barrel.userData.movingToBack = true;
+        barrel.userData.verticalSpeed = 0;
         
-        // Posicionar o barril no topo do nível
-        barrel.position.set(0, this.floorHeight * (this.numFloors - 1) + 1, 0);
-        barrel.rotation.x = Math.PI / 2; // Deitar o barril de lado
+        // Ensure barrel renders in front of other objects
+        barrel.renderOrder = 2;
+        barrel.material.depthTest = true;
+        barrel.material.transparent = false;
+
+        // Initial rotation to lay barrel on its side
+        barrel.rotation.z = Math.PI / 2;
         
-        barrel.userData.isBarrel = true;
-        barrel.userData.velocity = new THREE.Vector3();
-        
+        // Adicionar detalhes visuais ao barril
+        this.addBarrelDetails(barrel);
+
+        // Add to scene and tracking array
         this.scene.add(barrel);
         this.barrels.push(barrel);
+    }
+
+    // Novo método para adicionar detalhes visuais aos barris
+    addBarrelDetails(barrel) {
+        // Adicionar linhas verticais ao barril (como no jogo original)
+        const numLines = 8;
+        const lineWidth = 0.2;
+        const lineHeight = barrel.geometry.parameters.height + 0.2;
+        const lineRadius = barrel.geometry.parameters.radiusTop + 0.1;
         
-        return barrel;
+        for (let i = 0; i < numLines; i++) {
+            const angle = (i / numLines) * Math.PI * 2;
+            const lineGeometry = new THREE.BoxGeometry(lineWidth, lineHeight, lineWidth);
+            const lineMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xFFFFFF, // Linhas brancas
+                emissive: 0x222222,
+                emissiveIntensity: 0.2
+            });
+            
+            const line = new THREE.Mesh(lineGeometry, lineMaterial);
+            
+            // Posicionar a linha na superfície do barril
+            const x = Math.cos(angle) * lineRadius;
+            const z = Math.sin(angle) * lineRadius;
+            
+            line.position.set(x, 0, z);
+            
+            // Rotacionar a linha para apontar para o centro do barril
+            line.lookAt(0, 0, 0);
+            
+            // Adicionar a linha como filho do barril
+            barrel.add(line);
+        }
+        
+        // Adicionar anéis nas extremidades do barril
+        const ringRadius = barrel.geometry.parameters.radiusTop + 0.05;
+        const ringThickness = 0.3;
+        const ringDepth = 0.2;
+        
+        for (let end = -1; end <= 1; end += 2) {
+            const ringGeometry = new THREE.TorusGeometry(ringRadius, ringThickness, 16, 32);
+            const ringMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x888888, // Cinza metálico
+                specular: 0xFFFFFF,
+                shininess: 100
+            });
+            
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            
+            // Posicionar o anel na extremidade do barril
+            ring.position.y = end * (barrel.geometry.parameters.height / 2 - 0.1);
+            
+            // Rotacionar o anel para alinhar com o barril
+            ring.rotation.x = Math.PI / 2;
+            
+            // Adicionar o anel como filho do barril
+            barrel.add(ring);
+        }
     }
 
     createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
@@ -447,7 +639,7 @@ export class Level {
         const segments = 32;
         const radiusTop = 1.4;
         const radiusBottom = 1.4;
-        const height = 4.8;  // Increased from 2.4
+        const height = 2.8;  // Altura reduzida para combinar melhor com o ambiente
         const heightSegments = 16;
         
         const geometry = new THREE.CylinderGeometry(
@@ -460,7 +652,7 @@ export class Level {
         );
 
         // Bulge out the middle vertices with smoother transition
-        const middleRadius = 1.9;  // Increased from 1.7
+        const middleRadius = 1.8;  
         const positions = geometry.attributes.position.array;
         for (let i = 0; i < positions.length; i += 3) {
             const y = positions[i + 1];
@@ -472,23 +664,24 @@ export class Level {
         }
         geometry.computeVertexNormals();
         
+        // Material mais metálico vermelho escuro
         const material = new THREE.MeshPhongMaterial({ 
-            color: 0xff0000,
-            metalness: 0.3,
-            roughness: 0.8
+            color: 0xC00000,  // Vermelho mais escuro
+            specular: 0x555555,
+            shininess: 30
         });
 
         const barrel = new THREE.Mesh(geometry, material);
 
         // Position barrel at the stairs on the top floor
-        const spawnY = this.floorHeight * (this.numFloors - 1) + 2.8;  // Higher spawn to ensure no clipping
+        const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
         const spawnZ = this.floorLength * 0.15;
         const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
         barrel.position.set(spawnX, spawnY, spawnZ);
 
         // Add properties for movement
         barrel.userData.floor = this.numFloors - 1;
-        barrel.userData.speed = 50;
+        barrel.userData.speed = 70; // Velocidade aumentada para movimento mais rápido
         barrel.userData.rotationSpeed = 8;
         barrel.userData.movingToBack = true;
         barrel.userData.verticalSpeed = 0;
@@ -500,6 +693,9 @@ export class Level {
 
         // Initial rotation to lay barrel on its side
         barrel.rotation.z = Math.PI / 2;
+        
+        // Adicionar detalhes visuais ao barril
+        this.addBarrelDetails(barrel);
 
         // Add to scene and tracking array
         this.scene.add(barrel);
