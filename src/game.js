@@ -11,6 +11,7 @@ export class Game {
         this.camera = null;
         this.renderer = null;
         this.clock = new THREE.Clock();
+        this.time = 0;
         this.player = null;
         this.level = null;
         this.isRunning = false;
@@ -128,9 +129,17 @@ export class Game {
             this.level = new Level(this.scene);
             this.player = new Player(this.scene, this.camera);
 
+            // Garantir que o nível tenha a referência para o Game e Player
+            this.level.game = this;
+            this.level.player = this.player;
+
             // Start rendering loop
             this.animate();
             
+            // Garantir que o clock está inicializado corretamente
+            this.clock.start();
+            this.time = 0;
+
             // Forçar uma renderização inicial
             this.renderer.render(this.scene, this.camera);
 
@@ -271,6 +280,13 @@ export class Game {
             // Reset and recreate level and player
             this.level = new Level(this.scene);
             this.player = new Player(this.scene, this.camera);
+            
+            // Garantir que o nível tenha a referência para o Game e Player
+            this.level.game = this;
+            this.level.player = this.player;
+            
+            // Resetar o tempo do jogo
+            this.time = 0;
         }
         this.startCountdown();
     }
@@ -412,6 +428,9 @@ export class Game {
         // Only update game components if not paused
         if (!this.isPaused) {
             const deltaTime = this.clock.getDelta();
+            
+            // Atualizar o tempo do jogo
+            this.time += deltaTime;
             
             // Update game components
             if (this.player && this.player.enabled) {

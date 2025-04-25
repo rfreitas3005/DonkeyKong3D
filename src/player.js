@@ -32,7 +32,7 @@ export class Player {
         this.laneWidth = 6;
         this.enabled = false; // Adicionar propriedade enabled
 
-        // Camera control variables
+        // Camera control variables - restaurada configuração original
         this.cameraOffset = new THREE.Vector3(0, 3, 6);
         this.cameraRotation = new THREE.Euler(0, 0, 0);
         this.mouseSensitivity = 0.002;

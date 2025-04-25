@@ -3,7 +3,14 @@ import * as THREE from 'three';
 export class Level {
     constructor(scene) {
         this.scene = scene;
+        
+        // Estas propriedades serão inicializadas pelo Game posteriormente
+        this.game = null;
+        this.player = null;
+        
+        // Inicializações de propriedades
         this.floors = [];
+        this.platforms = []; // Para colisão dos barris
         this.stairs = [];
         this.barrels = [];
         this.barrelSpawnTimer = 0;
@@ -19,16 +26,24 @@ export class Level {
         this.onGameStarted = null;
         this.gravity = 9.8; // Assuming a default gravity value
         this.donkeyKongAnimationTime = 0;
+        this.animTime = 0;
+        this.nextSpecialIdleTime = 0;
+        this.chestBeatTime = 0;
+        this.isBeatingChest = false;
+        this.score = 0;
 
-        // Define ladder positions as a class property
+        // Define ladder positions as a class property - removida a escada do andar do DK (3)
         this.ladderPositions = [
             { floor: 0, z: this.floorLength * 0.10 },
             { floor: 1, z: this.floorLength * 0.95 },
-            { floor: 2, z: this.floorLength * 0.15 },
-            { floor: 3, z: this.floorLength * 0.85 }
+            { floor: 2, z: this.floorLength * 0.15 }
         ];
 
-        this.init();
+        try {
+            this.init();
+        } catch (error) {
+            console.error("Erro na inicialização do nível:", error);
+        }
     }
 
     init() {
@@ -364,7 +379,7 @@ export class Level {
 
     createDonkeyKong() {
         // Create elevated platform for Donkey Kong with collision
-        const platformGeometry = new THREE.BoxGeometry(10, 1, 10);
+        const platformGeometry = new THREE.BoxGeometry(14, 1.5, 12);
         const platformMaterial = new THREE.MeshPhongMaterial({
             color: 0x8B4513,
             metalness: 0.2,
@@ -376,7 +391,7 @@ export class Level {
         const topFloorY = (this.numFloors - 1) * this.floorHeight;
         this.donkeyKongPlatform.position.set(
             0,
-            topFloorY + 1,
+            topFloorY + 0.75,
             this.floorLength * 0.85
         );
         
@@ -384,59 +399,188 @@ export class Level {
         this.donkeyKongPlatform.userData.isBoundary = true;
         this.scene.add(this.donkeyKongPlatform);
 
-        // Create a simple gorilla placeholder using primitives
+        // Criar um Donkey Kong mais parecido com a referência
         const body = new THREE.Group();
-
-        // Torso
-        const torsoGeometry = new THREE.BoxGeometry(3, 4, 2);
-        const gorillaMaterial = new THREE.MeshPhongMaterial({ color: 0x4A3222 });
-        const torso = new THREE.Mesh(torsoGeometry, gorillaMaterial);
-        body.add(torso);
-
-        // Head
-        const headGeometry = new THREE.BoxGeometry(2, 2, 2);
-        const head = new THREE.Mesh(headGeometry, gorillaMaterial);
-        head.position.y = 3;
-        body.add(head);
-
-        // Arms
-        const armGeometry = new THREE.BoxGeometry(1, 3, 1);
-        const leftArm = new THREE.Mesh(armGeometry, gorillaMaterial);
-        leftArm.position.set(-2, 0, 0);
-        body.add(leftArm);
-
-        const rightArm = new THREE.Mesh(armGeometry, gorillaMaterial);
-        rightArm.position.set(2, 0, 0);
-        body.add(rightArm);
-
-        // Legs
-        const legGeometry = new THREE.BoxGeometry(1, 2, 1);
-        const leftLeg = new THREE.Mesh(legGeometry, gorillaMaterial);
-        leftLeg.position.set(-1, -3, 0);
-        body.add(leftLeg);
-
-        const rightLeg = new THREE.Mesh(legGeometry, gorillaMaterial);
-        rightLeg.position.set(1, -3, 0);
-        body.add(rightLeg);
-
-        // Add face details
-        const eyeGeometry = new THREE.SphereGeometry(0.2, 8, 8);
-        const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
         
-        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        leftEye.position.set(-0.5, 3, 1);
-        body.add(leftEye);
-
-        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        rightEye.position.set(0.5, 3, 1);
-        body.add(rightEye);
-
-        // Position the entire body
+        // Cores mais precisas baseadas na imagem de referência
+        const dkBrownColor = 0x8B5A2B; // Marrom principal do corpo
+        const dkLightBrownColor = 0xD2B48C; // Cor clara para o focinho
+        const dkRedColor = 0xFF0000; // Vermelho da gravata
+        const dkYellowColor = 0xFFD700; // Amarelo do logo "DK"
+        
+        // Torso com formato mais arredondado
+        const torsoGeometry = new THREE.SphereGeometry(3, 24, 18);
+        torsoGeometry.scale(1.3, 1, 0.9); // Mais largo e menos profundo
+        const torsoMaterial = new THREE.MeshPhongMaterial({ 
+            color: dkBrownColor,
+            shininess: 5
+        });
+        const torso = new THREE.Mesh(torsoGeometry, torsoMaterial);
+        torso.position.y = 0;
+        torso.position.z = 0;
+        torso.name = 'body';
+        body.add(torso);
+        
+        // Cabeça grande
+        const headGeometry = new THREE.SphereGeometry(2.8, 24, 20);
+        headGeometry.scale(1.2, 0.9, 0.8); // Ajustando proporções
+        const headMaterial = new THREE.MeshPhongMaterial({ 
+            color: dkBrownColor,
+            shininess: 5
+        });
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.y = 4.5;
+        head.position.z = 0.5;
+        head.name = 'head';
+        body.add(head);
+        
+        // Focinho grande e mais protuberante
+        const snoutGeometry = new THREE.SphereGeometry(2.5, 20, 16);
+        snoutGeometry.scale(1, 0.7, 0.6);
+        const snoutMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
+        const snout = new THREE.Mesh(snoutGeometry, snoutMaterial);
+        snout.position.set(0, 4, 2);
+        body.add(snout);
+        
+        // Boca
+        const mouthGeometry = new THREE.SphereGeometry(1.8, 20, 10);
+        mouthGeometry.scale(1, 0.4, 0.1);
+        const mouthMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x000000,
+            shininess: 10
+        });
+        const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+        mouth.position.set(0, 3, 3);
+        body.add(mouth);
+        
+        // Olhos grandes e mais expressivos
+        for (let side = -1; side <= 1; side += 2) {
+            if (side === 0) continue;
+            
+            // Branco do olho
+            const eyeGeometry = new THREE.SphereGeometry(0.8, 20, 20);
+            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+            const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            eye.position.set(side * 1.5, 5, 2);
+            body.add(eye);
+            
+            // Pupila
+            const pupilGeometry = new THREE.SphereGeometry(0.4, 12, 12);
+            const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+            pupil.position.set(side * 1.5, 5, 2.5);
+            body.add(pupil);
+            
+            // Sobrancelha
+            const browGeometry = new THREE.BoxGeometry(1, 0.3, 0.2);
+            const browMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
+            const brow = new THREE.Mesh(browGeometry, browMaterial);
+            brow.position.set(side * 1.5, 5.7, 2.2);
+            brow.rotation.x = Math.PI * 0.1;
+            body.add(brow);
+            
+            // Orelha
+            const earGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+            earGeometry.scale(0.5, 1, 0.3);
+            const earMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
+            const ear = new THREE.Mesh(earGeometry, earMaterial);
+            ear.position.set(side * 2.2, 6, 0);
+            body.add(ear);
+        }
+        
+        // Gravata vermelha com logo DK
+        const tieGeometry = new THREE.BoxGeometry(1.2, 3.5, 0.3);
+        const tieMaterial = new THREE.MeshPhongMaterial({
+            color: dkRedColor,
+            shininess: 30
+        });
+        const tie = new THREE.Mesh(tieGeometry, tieMaterial);
+        tie.position.set(0, 1.5, 2.9);
+        tie.rotation.x = Math.PI * 0.15;
+        body.add(tie);
+        
+        // Logo DK na gravata
+        const logoGeometry = new THREE.BoxGeometry(0.9, 1, 0.35);
+        const logoMaterial = new THREE.MeshPhongMaterial({
+            color: dkYellowColor,
+            shininess: 50
+        });
+        const logo = new THREE.Mesh(logoGeometry, logoMaterial);
+        logo.position.set(0, 0.5, 3.1);
+        logo.rotation.x = Math.PI * 0.15;
+        body.add(logo);
+        
+        // Braços mais pesados
+        for (let side = -1; side <= 1; side += 2) {
+            if (side === 0) continue;
+            
+            // Grupo para o braço inteiro para poder animar
+            const armGroup = new THREE.Group();
+            armGroup.name = side === -1 ? 'leftArm' : 'rightArm';
+            
+            // Ombro
+            const shoulderGeometry = new THREE.SphereGeometry(1.5, 16, 16);
+            const shoulderMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
+            const shoulder = new THREE.Mesh(shoulderGeometry, shoulderMaterial);
+            armGroup.add(shoulder);
+            
+            // Braço
+            const armGeometry = new THREE.CylinderGeometry(1.2, 1.4, 4, 12);
+            const armMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
+            const arm = new THREE.Mesh(armGeometry, armMaterial);
+            arm.position.y = -2.5;
+            arm.rotation.z = side * 0.2;
+            armGroup.add(arm);
+            
+            // Mão grande
+            const handGeometry = new THREE.SphereGeometry(1.8, 16, 16);
+            handGeometry.scale(1.2, 0.8, 0.8);
+            const handMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
+            const hand = new THREE.Mesh(handGeometry, handMaterial);
+            hand.position.set(side * 0.8, -5, 0);
+            armGroup.add(hand);
+            
+            // Posicionar o grupo do braço
+            armGroup.position.set(side * 3.5, 2, 0);
+            body.add(armGroup);
+        }
+        
+        // Pernas curtas e fortes
+        for (let side = -1; side <= 1; side += 2) {
+            if (side === 0) continue;
+            
+            // Grupo para a perna inteira
+            const legGroup = new THREE.Group();
+            legGroup.name = side === -1 ? 'leftLeg' : 'rightLeg';
+            
+            // Coxa
+            const thighGeometry = new THREE.CylinderGeometry(1.2, 1.1, 2.5, 12);
+            const thighMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
+            const thigh = new THREE.Mesh(thighGeometry, thighMaterial);
+            thigh.position.y = -1;
+            legGroup.add(thigh);
+            
+            // Pé
+            const footGeometry = new THREE.BoxGeometry(2, 1, 3);
+            const footMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
+            const foot = new THREE.Mesh(footGeometry, footMaterial);
+            foot.position.set(0, -2.5, 0.8);
+            legGroup.add(foot);
+            
+            // Posicionar o grupo da perna
+            legGroup.position.set(side * 2, -2.5, 0);
+            body.add(legGroup);
+        }
+        
+        // Posicionar o Donkey Kong completo
         body.position.set(
             0,
-            topFloorY + 3, // Above the platform
+            topFloorY + 4.5,
             this.floorLength * 0.85
         );
+        
+        // Virar para frente
+        body.rotation.y = Math.PI;
 
         this.donkeyKong = body;
         this.scene.add(this.donkeyKong);
@@ -444,6 +588,11 @@ export class Level {
         // Initialize throwing state
         this.isThrowingBarrel = false;
         this.throwAnimationTime = 0;
+
+        // Adicionar temporizador para arremessar barris
+        this.barrelThrowInterval = 5; // segundos entre arremessos
+        this.nextBarrelThrowTime = 0; // Inicializado com 0, será atualizado no primeiro update
+        this.barrels = []; // array para armazenar os barris
     }
 
     createPlatform(x, y, z, width, height, depth, color = 0x808080) {
@@ -494,12 +643,12 @@ export class Level {
     }
 
     createBarrel() {
-        // Create the barrel with a single cylinder with more segments for smoothness
-        const segments = 32;
-        const radiusTop = 1.4;
-        const radiusBottom = 1.4;
-        const height = 2.8;  // Altura reduzida para combinar melhor com o ambiente
-        const heightSegments = 16;
+        // Barril mais parecido com o jogo original - cilindro redondo com aros
+        const segments = 24;
+        const radiusTop = 1.2;
+        const radiusBottom = 1.2;
+        const height = 2.4;
+        const heightSegments = 8;
         
         const geometry = new THREE.CylinderGeometry(
             radiusTop,
@@ -510,24 +659,24 @@ export class Level {
             false
         );
 
-        // Bulge out the middle vertices with smoother transition
-        const middleRadius = 1.8;  
+        // Não deformar tanto o barril - manter mais cilíndrico
+        const middleRadius = 1.4;  
         const positions = geometry.attributes.position.array;
         for (let i = 0; i < positions.length; i += 3) {
             const y = positions[i + 1];
             const heightFactor = y / (height / 2);
             const smoothFactor = 1 - Math.pow(heightFactor, 4);
-            const bulge = 1 + smoothFactor * (middleRadius/radiusTop - 1);
+            const bulge = 1 + smoothFactor * (middleRadius/radiusTop - 1) * 0.7;
             positions[i] *= bulge;
             positions[i + 2] *= bulge;
         }
         geometry.computeVertexNormals();
         
-        // Material mais metálico vermelho escuro
+        // Material de madeira
         const material = new THREE.MeshPhongMaterial({ 
-            color: 0xC00000,  // Vermelho mais escuro
-            specular: 0x555555,
-            shininess: 30
+            color: 0xA05010,  // Marrom mais terroso para o barril
+            specular: 0x222222,
+            shininess: 15
         });
 
         const barrel = new THREE.Mesh(geometry, material);
@@ -540,7 +689,7 @@ export class Level {
 
         // Add properties for movement
         barrel.userData.floor = this.numFloors - 1;
-        barrel.userData.speed = 70; // Velocidade aumentada para movimento mais rápido
+        barrel.userData.speed = 70; // Velocidade mantida alta para gameplay
         barrel.userData.rotationSpeed = 8;
         barrel.userData.movingToBack = true;
         barrel.userData.verticalSpeed = 0;
@@ -563,60 +712,24 @@ export class Level {
 
     // Novo método para adicionar detalhes visuais aos barris
     addBarrelDetails(barrel) {
-        // Adicionar linhas verticais ao barril (como no jogo original)
-        const numLines = 8;
-        const lineWidth = 0.2;
-        const lineHeight = barrel.geometry.parameters.height + 0.2;
-        const lineRadius = barrel.geometry.parameters.radiusTop + 0.1;
+        // Adicionar detalhes visuais ao barril - aros metálicos mais nítidos
+        const ringGeometry = new THREE.TorusGeometry(1.25, 0.1, 8, 24);
+        const ringMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x555555,
+            roughness: 0.3,
+            metalness: 0.8
+        });
         
-        for (let i = 0; i < numLines; i++) {
-            const angle = (i / numLines) * Math.PI * 2;
-            const lineGeometry = new THREE.BoxGeometry(lineWidth, lineHeight, lineWidth);
-            const lineMaterial = new THREE.MeshPhongMaterial({ 
-                color: 0xFFFFFF, // Linhas brancas
-                emissive: 0x222222,
-                emissiveIntensity: 0.2
-            });
-            
-            const line = new THREE.Mesh(lineGeometry, lineMaterial);
-            
-            // Posicionar a linha na superfície do barril
-            const x = Math.cos(angle) * lineRadius;
-            const z = Math.sin(angle) * lineRadius;
-            
-            line.position.set(x, 0, z);
-            
-            // Rotacionar a linha para apontar para o centro do barril
-            line.lookAt(0, 0, 0);
-            
-            // Adicionar a linha como filho do barril
-            barrel.add(line);
-        }
-        
-        // Adicionar anéis nas extremidades do barril
-        const ringRadius = barrel.geometry.parameters.radiusTop + 0.05;
-        const ringThickness = 0.3;
-        const ringDepth = 0.2;
-        
-        for (let end = -1; end <= 1; end += 2) {
-            const ringGeometry = new THREE.TorusGeometry(ringRadius, ringThickness, 16, 32);
-            const ringMaterial = new THREE.MeshPhongMaterial({ 
-                color: 0x888888, // Cinza metálico
-                specular: 0xFFFFFF,
-                shininess: 100
-            });
-            
+        // Criar aros metálicos em posições espaçadas uniformemente
+        const positions = [-0.9, -0.3, 0.3, 0.9]; // Quatro aros ao longo do barril
+        positions.forEach(pos => {
             const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-            
-            // Posicionar o anel na extremidade do barril
-            ring.position.y = end * (barrel.geometry.parameters.height / 2 - 0.1);
-            
-            // Rotacionar o anel para alinhar com o barril
-            ring.rotation.x = Math.PI / 2;
-            
-            // Adicionar o anel como filho do barril
+            ring.position.set(0, pos, 0);
+            ring.rotation.x = Math.PI / 2; // Alinhar com o barril
             barrel.add(ring);
-        }
+        });
+        
+        return barrel;
     }
 
     createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
@@ -635,71 +748,8 @@ export class Level {
     }
 
     spawnBarrel() {
-        // Create the barrel with a single cylinder with more segments for smoothness
-        const segments = 32;
-        const radiusTop = 1.4;
-        const radiusBottom = 1.4;
-        const height = 2.8;  // Altura reduzida para combinar melhor com o ambiente
-        const heightSegments = 16;
-        
-        const geometry = new THREE.CylinderGeometry(
-            radiusTop,
-            radiusBottom,
-            height,
-            segments,
-            heightSegments,
-            false
-        );
-
-        // Bulge out the middle vertices with smoother transition
-        const middleRadius = 1.8;  
-        const positions = geometry.attributes.position.array;
-        for (let i = 0; i < positions.length; i += 3) {
-            const y = positions[i + 1];
-            const heightFactor = y / (height / 2);
-            const smoothFactor = 1 - Math.pow(heightFactor, 4);
-            const bulge = 1 + smoothFactor * (middleRadius/radiusTop - 1);
-            positions[i] *= bulge;
-            positions[i + 2] *= bulge;
-        }
-        geometry.computeVertexNormals();
-        
-        // Material mais metálico vermelho escuro
-        const material = new THREE.MeshPhongMaterial({ 
-            color: 0xC00000,  // Vermelho mais escuro
-            specular: 0x555555,
-            shininess: 30
-        });
-
-        const barrel = new THREE.Mesh(geometry, material);
-
-        // Position barrel at the stairs on the top floor
-        const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
-        const spawnZ = this.floorLength * 0.15;
-        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
-        barrel.position.set(spawnX, spawnY, spawnZ);
-
-        // Add properties for movement
-        barrel.userData.floor = this.numFloors - 1;
-        barrel.userData.speed = 70; // Velocidade aumentada para movimento mais rápido
-        barrel.userData.rotationSpeed = 8;
-        barrel.userData.movingToBack = true;
-        barrel.userData.verticalSpeed = 0;
-        
-        // Ensure barrel renders in front of other objects
-        barrel.renderOrder = 2;
-        barrel.material.depthTest = true;
-        barrel.material.transparent = false;
-
-        // Initial rotation to lay barrel on its side
-        barrel.rotation.z = Math.PI / 2;
-        
-        // Adicionar detalhes visuais ao barril
-        this.addBarrelDetails(barrel);
-
-        // Add to scene and tracking array
-        this.scene.add(barrel);
-        this.barrels.push(barrel);
+        // Usar o mesmo método de criar barril
+        this.createBarrel();
     }
 
     update(deltaTime) {
@@ -776,34 +826,7 @@ export class Level {
 
             // Animate Donkey Kong
             if (this.donkeyKong) {
-                if (this.isThrowingBarrel) {
-                    // Throwing animation
-                    this.throwAnimationTime += 0.1;
-                    const throwProgress = Math.min(this.throwAnimationTime, 1);
-                    
-                    // Raise arms during throw
-                    const leftArm = this.donkeyKong.children[2];
-                    const rightArm = this.donkeyKong.children[3];
-                    
-                    leftArm.rotation.x = -Math.PI/2 * throwProgress;
-                    rightArm.rotation.x = -Math.PI/2 * throwProgress;
-                    
-                    if (this.throwAnimationTime >= 1) {
-                        this.isThrowingBarrel = false;
-                        this.throwAnimationTime = 0;
-                    }
-                } else {
-                    // Idle animation
-                    this.donkeyKongAnimationTime += 0.05;
-                    const yOffset = Math.sin(this.donkeyKongAnimationTime) * 0.3;
-                    this.donkeyKong.position.y = (this.numFloors - 1) * this.floorHeight + 3 + yOffset;
-                    
-                    // Gentle arm swaying when not throwing
-                    const leftArm = this.donkeyKong.children[2];
-                    const rightArm = this.donkeyKong.children[3];
-                    leftArm.rotation.x = Math.sin(this.donkeyKongAnimationTime) * 0.3;
-                    rightArm.rotation.x = Math.sin(this.donkeyKongAnimationTime + Math.PI) * 0.3;
-                }
+                this.animateDonkeyKong(deltaTime);
             }
         }
 
@@ -811,6 +834,156 @@ export class Level {
         if (!this.gameStarted && this.onGameStarted) {
             this.gameStarted = true;
             this.onGameStarted();
+        }
+
+        // Inicializar o próximo tempo de arremesso se ainda não foi inicializado
+        if (this.nextBarrelThrowTime === 0 && this.game && typeof this.game.time === 'number') {
+            this.nextBarrelThrowTime = this.game.time + 3;
+        }
+
+        // Verificar se é hora de arremessar um barril
+        if (this.game && typeof this.game.time === 'number' && 
+            this.game.time > this.nextBarrelThrowTime && 
+            this.donkeyKong && this.player && this.game.isRunning) {
+            this.throwBarrel();
+            this.nextBarrelThrowTime = this.game.time + this.barrelThrowInterval;
+        }
+    }
+
+    animateDonkeyKong(deltaTime) {
+        if (!this.donkeyKong) return;
+        
+        // Atualizar o contador de tempo de animação
+        this.animTime += deltaTime;
+        
+        // Animação de arremesso de barril
+        if (this.isThrowingBarrel) {
+            this.throwAnimationTime += deltaTime;
+            const throwDuration = 1.2; // duração total da animação de arremesso
+            
+            // Fase 1: Levantar o braço direito com o barril (0-0.5s)
+            if (this.throwAnimationTime < 0.5) {
+                const phase = this.throwAnimationTime / 0.5; // 0 a 1
+                // Braço direito levantando
+                if (this.donkeyKong.getObjectByName) {
+                    const rightArm = this.donkeyKong.getObjectByName('rightArm');
+                    if (rightArm) {
+                        rightArm.rotation.z = THREE.MathUtils.lerp(0, -Math.PI / 2, phase);
+                        rightArm.rotation.x = THREE.MathUtils.lerp(0, Math.PI / 4, phase);
+                    }
+                }
+            }
+            // Fase 2: Abaixar o braço para arremessar (0.5-1.2s)
+            else if (this.throwAnimationTime < throwDuration) {
+                const phase = (this.throwAnimationTime - 0.5) / 0.7; // 0 a 1
+                // Braço direito abaixando rapidamente
+                if (this.donkeyKong.getObjectByName) {
+                    const rightArm = this.donkeyKong.getObjectByName('rightArm');
+                    if (rightArm) {
+                        rightArm.rotation.z = THREE.MathUtils.lerp(-Math.PI / 2, Math.PI / 4, phase);
+                        rightArm.rotation.x = THREE.MathUtils.lerp(Math.PI / 4, -Math.PI / 6, phase);
+                    }
+                }
+            } 
+            // Finalizar animação
+            else {
+                this.isThrowingBarrel = false;
+                this.throwAnimationTime = 0;
+                
+                // Resetar posição do braço
+                if (this.donkeyKong.getObjectByName) {
+                    const rightArm = this.donkeyKong.getObjectByName('rightArm');
+                    if (rightArm) {
+                        rightArm.rotation.z = 0;
+                        rightArm.rotation.x = 0;
+                    }
+                }
+            }
+        }
+        // Animação de espera (idle)
+        else {
+            // Se nextSpecialIdleTime ainda não foi definido ou já passou
+            if (this.nextSpecialIdleTime <= 0 || this.animTime > this.nextSpecialIdleTime) {
+                // Iniciar sequência de bater no peito
+                this.chestBeatTime = 0;
+                this.isBeatingChest = true;
+                this.nextSpecialIdleTime = this.animTime + 4 + Math.random() * 2; // próxima vez
+                
+                // Rugido do Donkey Kong (se disponível)
+                if (this.game && this.game.soundManager) {
+                    this.game.soundManager.playSound('dkroar');
+                }
+            }
+            
+            // Animação de respiração suave
+            if (this.donkeyKong && this.donkeyKong.getObjectByName) {
+                const body = this.donkeyKong.getObjectByName('body');
+                if (body) {
+                    // Movimento suave de respiração
+                    body.scale.y = 1 + Math.sin(this.animTime * 2) * 0.02;
+                    body.scale.z = 1 + Math.sin(this.animTime * 2) * 0.01;
+                }
+                
+                // Movimento sutil da cabeça
+                const head = this.donkeyKong.getObjectByName('head');
+                if (head) {
+                    head.rotation.y = Math.sin(this.animTime * 0.8) * 0.1;
+                }
+            }
+            
+            // Executar animação de bater no peito
+            if (this.isBeatingChest && this.donkeyKong) {
+                if (!this.chestBeatTime) this.chestBeatTime = 0;
+                this.chestBeatTime += deltaTime;
+                
+                const beatDuration = 1.5; // duração total da animação
+                const beatCount = 3; // número de batidas no peito
+                const beatInterval = beatDuration / beatCount;
+                
+                if (this.chestBeatTime < beatDuration && this.donkeyKong.getObjectByName) {
+                    // Determinar a fase da batida atual
+                    const beatPhase = (this.chestBeatTime % beatInterval) / beatInterval;
+                    const currentBeat = Math.floor(this.chestBeatTime / beatInterval);
+                    
+                    // Alternar entre braços
+                    const isLeftArm = currentBeat % 2 === 0;
+                    const armName = isLeftArm ? 'leftArm' : 'rightArm';
+                    const arm = this.donkeyKong.getObjectByName(armName);
+                    
+                    if (arm) {
+                        // Movimento para dentro (0-0.3)
+                        if (beatPhase < 0.3) {
+                            const phase = beatPhase / 0.3;
+                            arm.rotation.z = isLeftArm ? 
+                                THREE.MathUtils.lerp(0, Math.PI / 3, phase) : 
+                                THREE.MathUtils.lerp(0, -Math.PI / 3, phase);
+                        } 
+                        // Movimento para fora (0.3-0.5)
+                        else if (beatPhase < 0.5) {
+                            const phase = (beatPhase - 0.3) / 0.2;
+                            arm.rotation.z = isLeftArm ? 
+                                THREE.MathUtils.lerp(Math.PI / 3, 0, phase) : 
+                                THREE.MathUtils.lerp(-Math.PI / 3, 0, phase);
+                        }
+                        // Aguardar próxima batida (0.5-1.0)
+                        else {
+                            arm.rotation.z = 0;
+                        }
+                    }
+                } else {
+                    // Finalizar animação de bater no peito
+                    this.isBeatingChest = false;
+                    
+                    // Resetar posição dos braços
+                    if (this.donkeyKong.getObjectByName) {
+                        const leftArm = this.donkeyKong.getObjectByName('leftArm');
+                        const rightArm = this.donkeyKong.getObjectByName('rightArm');
+                        
+                        if (leftArm) leftArm.rotation.z = 0;
+                        if (rightArm) rightArm.rotation.z = 0;
+                    }
+                }
+            }
         }
     }
 
@@ -884,6 +1057,178 @@ export class Level {
         const scoreElement = document.getElementById('score');
         if (scoreElement) {
             scoreElement.textContent = `SCORE: ${this.score.toString().padStart(6, '0')}`;
+        }
+    }
+
+    throwBarrel() {
+        // Verificar se todas as referências necessárias existem
+        if (!this.game || !this.player || !this.donkeyKong) {
+            console.error("Não é possível arremessar barril: referências faltando");
+            return;
+        }
+
+        this.throwAnimationTime = 0;
+        
+        // Iniciar a animação de arremesso
+        this.isThrowingBarrel = true;
+        
+        // Adicionar som de barril, se o gerenciador de sons estiver disponível
+        if (this.game && this.game.soundManager) {
+            this.game.soundManager.playSound('barrel_throw');
+        }
+        
+        // Atrasar o lançamento físico do barril para coincidir com a animação
+        setTimeout(() => {
+            try {
+                // Verificar novamente se as referências são válidas
+                if (!this.game || !this.player || !this.donkeyKong) {
+                    console.error("Arremesso cancelado: referências inválidas");
+                    return;
+                }
+                
+                // Criar geometria do barril - um cilindro deitado
+                const barrelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.5, 16);
+                const barrelMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x8B4513,  // Marrom para o barril
+                    roughness: 0.7
+                });
+                
+                const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+                
+                // Posicionar o barril nas mãos do Donkey Kong
+                barrel.position.copy(this.donkeyKong.position);
+                barrel.position.y += 2; // Ajustar altura
+                barrel.position.x += 0.5; // Ligeiramente à frente do DK
+                
+                // Rotacionar o barril para ficar na horizontal
+                barrel.rotation.z = Math.PI / 2;
+                
+                // Adicionar detalhes visuais ao barril
+                this.addBarrelDetails(barrel);
+                
+                // Calcular direção para o jogador com variação
+                const playerPos = this.player.object ? this.player.object.position : 
+                               (this.player.mesh ? this.player.mesh.position : new THREE.Vector3());
+                
+                const direction = new THREE.Vector3();
+                direction.subVectors(playerPos, barrel.position).normalize();
+                
+                // Adicionar alguma aleatoriedade à direção
+                direction.x += (Math.random() - 0.5) * 0.2;
+                
+                // Força do arremesso - variável
+                const throwPower = 0.15 + Math.random() * 0.05;
+                
+                // Aplicar velocidade
+                barrel.velocity = new THREE.Vector3(
+                    direction.x * throwPower,
+                    0.1,  // Impulso para cima
+                    direction.z * throwPower
+                );
+                
+                // Propriedades para rolagem do barril
+                barrel.rollingSpeed = 0.1 + Math.random() * 0.05;
+                barrel.rotationAxis = new THREE.Vector3(0, 0, 1);
+                
+                // Adicionar hitbox para colisão
+                barrel.hitbox = new THREE.Box3().setFromObject(barrel);
+                
+                // Guardar referência ao objeto original para atualização da hitbox
+                barrel.baseObject = barrel;
+                
+                // Adicionar o barril à cena e ao array de barris
+                this.scene.add(barrel);
+                this.barrels.push(barrel);
+                
+                console.log('Barrel thrown at:', barrel.position);
+            } catch (error) {
+                console.error("Erro ao lançar barril:", error);
+            }
+        }, 750); // Atraso de 750ms para coincidir com a animação
+    }
+
+    updateBarrels(deltaTime) {
+        // Atualizar todos os barris
+        for (let i = this.barrels.length - 1; i >= 0; i--) {
+            const barrel = this.barrels[i];
+            const mesh = barrel.mesh;
+            
+            // Aplicar gravidade se não estiver no chão
+            if (!barrel.onGround) {
+                barrel.velocity.y -= 9.8 * deltaTime; // Gravidade
+            }
+            
+            // Atualizar posição
+            mesh.position.x += barrel.velocity.x * deltaTime;
+            mesh.position.y += barrel.velocity.y * deltaTime;
+            
+            // Rotacionar o barril
+            mesh.rotation.y += barrel.angularVelocity.y * deltaTime;
+            mesh.rotation.x += barrel.angularVelocity.x * deltaTime;
+            
+            // Verificar colisão com plataformas
+            const checkPlatformCollision = () => {
+                for (let j = 0; j < this.platforms.length; j++) {
+                    const platform = this.platforms[j];
+                    
+                    // Ignorar plataformas já ultrapassadas
+                    if (j < barrel.lastPlatformIndex - 1) continue;
+                    
+                    // Calcular limites da plataforma
+                    const platformMinX = platform.position.x - platform.scale.x/2;
+                    const platformMaxX = platform.position.x + platform.scale.x/2;
+                    const platformY = platform.position.y + platform.scale.y/2;
+                    
+                    // Verificar se o barril está acima da plataforma e caindo
+                    if (mesh.position.x >= platformMinX && mesh.position.x <= platformMaxX &&
+                        mesh.position.y - 0.5 <= platformY && mesh.position.y - 0.4 >= platformY &&
+                        barrel.velocity.y < 0) {
+                        
+                        // Posicionar em cima da plataforma
+                        mesh.position.y = platformY + 0.5;
+                        
+                        // Inverter velocidade X se chegou na ponta da plataforma
+                        if (mesh.position.x <= platformMinX + 1 || mesh.position.x >= platformMaxX - 1) {
+                            barrel.velocity.x = -barrel.velocity.x;
+                        }
+                        
+                        // Reduzir velocidade vertical (amortecimento)
+                        barrel.velocity.y = 0;
+                        barrel.onGround = true;
+                        barrel.lastPlatformIndex = j;
+                        
+                        // Mudar velocidade com base no índice da plataforma (alternar direção em plataformas alternadas)
+                        barrel.velocity.x = (j % 2 === 0) ? -5 : 5;
+                        
+                        return true;
+                    }
+                }
+                
+                // Se chegou aqui, não está tocando nenhuma plataforma
+                barrel.onGround = false;
+                return false;
+            };
+            
+            checkPlatformCollision();
+            
+            // Verificar colisão com o jogador
+            if (this.player && this.player.mesh) {
+                const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
+                const barrelBox = new THREE.Box3().setFromObject(mesh);
+                
+                if (barrelBox.intersectsBox(playerBox)) {
+                    // Colisão com o jogador
+                    if (this.game.onPlayerHit) {
+                        this.game.onPlayerHit('barrel');
+                    }
+                }
+            }
+            
+            // Remover barris que saíram da área do jogo
+            if (mesh.position.y < -10 || mesh.position.x < -20 || mesh.position.x > 20) {
+                this.scene.remove(mesh);
+                this.barrels.splice(i, 1);
+            }
         }
     }
 } 

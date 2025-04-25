@@ -1,3 +1,7 @@
+// Importar as classes necessárias
+import { Level } from './level.js';
+import { Player } from './player.js';
+
 export class GameMenu {
     constructor(game) {
         this.game = game;
@@ -399,6 +403,9 @@ export class GameMenu {
         try {
             console.log('Iniciando processo de inicialização do jogo...');
             
+            // Esconder o menu
+            this.hideMenu();
+            
             // Inicializar o canvas do jogo
             const canvas = this.game.renderer ? this.game.renderer.domElement : null;
             
@@ -417,40 +424,53 @@ export class GameMenu {
 
             console.log('Inicializando nível e jogador...');
             
-            // Initialize level and player but don't start movement yet
-            if (!this.game.level) {
-                console.log('Criando nível...');
-                this.game.level = new Level(this.game.scene);
-            }
-            
-            if (!this.game.player) {
-                console.log('Criando jogador...');
-                this.game.player = new Player(this.game.scene, this.game.camera);
-                console.log('Jogador criado, aguardando carregamento do modelo...');
+            try {
+                // Initialize level and player but don't start movement yet
+                if (!this.game.level) {
+                    console.log('Criando nível...');
+                    this.game.level = new Level(this.game.scene);
+                    
+                    // Atribuir a referência do game ao nível
+                    this.game.level.game = this.game;
+                }
                 
-                // Esperar o modelo do jogador carregar com timeout
-                let loadingAttempts = 0;
-                const maxAttempts = 30; // 3 segundos máximo
-                
-                await new Promise((resolve, reject) => {
-                    const checkLoaded = () => {
-                        if (this.game.player.isLoaded) {
-                            console.log('Modelo do jogador carregado com sucesso');
-                            resolve();
-                        } else {
-                            loadingAttempts++;
-                            console.log(`Aguardando carregamento do modelo... (Tentativa ${loadingAttempts}/${maxAttempts})`);
-                            
-                            if (loadingAttempts >= maxAttempts) {
-                                console.error('Tempo limite excedido para carregar o modelo do jogador');
-                                reject(new Error('Tempo limite excedido para carregar o modelo do jogador'));
+                if (!this.game.player) {
+                    console.log('Criando jogador...');
+                    this.game.player = new Player(this.game.scene, this.game.camera);
+                    console.log('Jogador criado, aguardando carregamento do modelo...');
+                    
+                    // Atribuir a referência do jogador ao nível
+                    if (this.game.level) {
+                        this.game.level.player = this.game.player;
+                    }
+                    
+                    // Esperar o modelo do jogador carregar com timeout
+                    let loadingAttempts = 0;
+                    const maxAttempts = 30; // 3 segundos máximo
+                    
+                    await new Promise((resolve, reject) => {
+                        const checkLoaded = () => {
+                            if (this.game.player.isLoaded) {
+                                console.log('Modelo do jogador carregado com sucesso');
+                                resolve();
                             } else {
-                                setTimeout(checkLoaded, 100);
+                                loadingAttempts++;
+                                console.log(`Aguardando carregamento do modelo... (Tentativa ${loadingAttempts}/${maxAttempts})`);
+                                
+                                if (loadingAttempts >= maxAttempts) {
+                                    console.error('Tempo limite excedido para carregar o modelo do jogador');
+                                    reject(new Error('Tempo limite excedido para carregar o modelo do jogador'));
+                                } else {
+                                    setTimeout(checkLoaded, 100);
+                                }
                             }
-                        }
-                    };
-                    checkLoaded();
-                });
+                        };
+                        checkLoaded();
+                    });
+                }
+            } catch (initError) {
+                console.error('Erro ao criar nível ou jogador:', initError);
+                throw new Error('Falha ao inicializar nível ou jogador: ' + initError.message);
             }
 
             // Garantir que o jogo está visível
@@ -464,7 +484,7 @@ export class GameMenu {
             }
 
             // Set player to idle animation and initial position
-            if (this.game.player && this.game.player.animations['idle']) {
+            if (this.game.player && this.game.player.animations && this.game.player.animations['idle']) {
                 console.log('Iniciando animação idle...');
                 this.game.player.playAnimation('idle');
             }
@@ -472,7 +492,6 @@ export class GameMenu {
             console.log('Iniciando contagem regressiva...');
             // Start the countdown sequence after everything is loaded
             await this.game.startCountdown();
-            
         } catch (error) {
             console.error('Erro durante a inicialização do jogo:', error);
             // Mostrar mensagem de erro para o usuário
@@ -493,8 +512,7 @@ export class GameMenu {
             
             // Mostrar o menu novamente após 3 segundos
             setTimeout(() => {
-                this.showMenu();
-                errorMessage.remove();
+                document.location.reload(); // Recarregar a página para resolver problemas de estado
             }, 3000);
         }
     }
