@@ -17,7 +17,7 @@ export class Player {
         this.jumpCooldown = 1.0; // 1 second cooldown
         
         // Reduced movement speeds
-        this.moveSpeed = 0.04;
+        this.moveSpeed = 0.08;
         this.climbSpeed = 0.025;
         this.jumpForce = 0.15;
         this.gravity = 0.004;
@@ -255,7 +255,7 @@ export class Player {
                 
                 // Se o jogo ainda estiver em execução e o jogador habilitado, 
                 // exibir mensagem para reclique
-                if (this.enabled) {
+                if (this.enabled && !(window.game && window.game.isPaused)) {
                     this.enableControls();
                 }
             }
@@ -855,39 +855,6 @@ export class Player {
             if (document.getElementById('pointer-lock-instruction')) {
                 console.log('Instruction element already exists, not creating a new one');
                 return;
-            }
-            
-            if (!document.pointerLockElement) {
-                // Exibir instrução de clique para o usuário
-                const instruction = document.createElement('div');
-                instruction.id = 'pointer-lock-instruction';
-                instruction.style.position = 'fixed';
-                instruction.style.top = '50%';
-                instruction.style.left = '50%';
-                instruction.style.transform = 'translate(-50%, -50%)';
-                instruction.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                instruction.style.color = 'white';
-                instruction.style.padding = '20px';
-                instruction.style.fontFamily = "'Press Start 2P', monospace";
-                instruction.style.zIndex = '10000';
-                instruction.style.textAlign = 'center';
-                instruction.innerHTML = 'CLIQUE NA TELA PARA JOGAR<br><br>Use WASD para mover<br>Espaço para pular';
-                
-                document.body.appendChild(instruction);
-                
-                // Adicionar event listener para o documento inteiro
-                const requestPointerLock = () => {
-                    document.body.requestPointerLock();
-                    
-                    // Remover a instrução e o listener após o clique
-                    const instructionElement = document.getElementById('pointer-lock-instruction');
-                    if (instructionElement) {
-                        instructionElement.remove();
-                    }
-                    document.removeEventListener('click', requestPointerLock);
-                };
-                
-                document.addEventListener('click', requestPointerLock);
             }
         } catch (error) {
             console.error('Error enabling pointer lock:', error);

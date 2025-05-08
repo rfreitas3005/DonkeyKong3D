@@ -1,9 +1,14 @@
 // Importar as classes necessárias
 import { Level } from './level.js';
 import { Player } from './player.js';
+import * as THREE from 'three';
 
 export class GameMenu {
     constructor(game) {
+        if (!game) {
+            throw new Error('Game instance is required for menu initialization');
+        }
+        
         this.game = game;
         this.options = {
             sensitivity: 0.002,
@@ -12,277 +17,554 @@ export class GameMenu {
         };
         this.menuContainer = null;
         this.pauseMenu = null;
-        this.currentSelection = 0; // 0 = PLAY, 1 = OPTIONS
+        this.currentSelection = 0;
         this.menuItems = [];
+        this.isVisible = false;
+        this.isPauseVisible = false;
+        
+        // Initialize menu
         this.init();
+        
+        // Handler de teclado sempre igual
+        this._keydownHandler = (e) => this.handleKeyPress(e);
+        
+        // Add event listeners
+        this.setupEventListeners();
     }
 
-    init() {
-        // Create main menu container
-        this.menuContainer = document.createElement('div');
-        this.menuContainer.style.position = 'fixed';
-        this.menuContainer.style.top = '0';
-        this.menuContainer.style.left = '0';
-        this.menuContainer.style.width = '100%';
-        this.menuContainer.style.height = '100%';
-        this.menuContainer.style.backgroundColor = 'black';
-        this.menuContainer.style.display = 'flex';
-        this.menuContainer.style.flexDirection = 'column';
-        this.menuContainer.style.alignItems = 'center';
-        this.menuContainer.style.justifyContent = 'space-between';
-        this.menuContainer.style.padding = '100px 0';
-        this.menuContainer.style.zIndex = '1000';
-        this.menuContainer.style.fontFamily = "'Press Start 2P', monospace";
-
-        // Create top section for scores
-        const topSection = document.createElement('div');
-        topSection.style.width = '100%';
-        topSection.style.display = 'flex';
-        topSection.style.justifyContent = 'space-between';
-        topSection.style.padding = '0 20px';
-
-        // Create score display
-        const scoreDisplay = document.createElement('div');
-        scoreDisplay.style.color = 'white';
-        scoreDisplay.style.fontSize = '16px';
-        scoreDisplay.innerHTML = `
-            <div>SCORE</div>
-            <div>000000</div>
-        `;
-
-        // Create high score display
-        const highScoreDisplay = document.createElement('div');
-        highScoreDisplay.style.color = 'white';
-        highScoreDisplay.style.fontSize = '16px';
-        highScoreDisplay.style.textAlign = 'right';
-        highScoreDisplay.innerHTML = `
-            <div>HIGH SCORE</div>
-            <div>000000</div>
-        `;
-
-        topSection.appendChild(scoreDisplay);
-        topSection.appendChild(highScoreDisplay);
-
-        // Create middle section for title and menu items
-        const middleSection = document.createElement('div');
-        middleSection.style.textAlign = 'center';
-
-        // Create title
-        const title = document.createElement('div');
-        title.innerHTML = `
-            <div style="text-align: center; margin-bottom: 40px;">
-                <div style="font-size: 48px; letter-spacing: 4px; margin-bottom: 10px; color: #ff69b4;">DONKEY</div>
-                <div style="font-size: 48px; letter-spacing: 4px; color: #ff69b4;">KONG</div>
-                <div style="font-size: 48px; letter-spacing: 4px; color: #ff69b4; margin-top: 10px;">3D</div>
-            </div>
-        `;
-
-        // Create menu items container
-        const menuItemsContainer = document.createElement('div');
-        menuItemsContainer.style.display = 'flex';
-        menuItemsContainer.style.flexDirection = 'column';
-        menuItemsContainer.style.alignItems = 'center';
-        menuItemsContainer.style.gap = '20px';
-        menuItemsContainer.style.marginTop = '40px';
-
-        // Create PLAY option
-        const playOption = document.createElement('div');
-        playOption.textContent = 'PLAY';
-        playOption.style.color = '#cccccc';
-        playOption.style.fontSize = '24px';
-        playOption.style.cursor = 'pointer';
-        this.menuItems.push(playOption);
-
-        // Create OPTIONS option
-        const optionsButton = document.createElement('div');
-        optionsButton.textContent = 'OPTIONS';
-        optionsButton.style.color = '#cccccc';
-        optionsButton.style.fontSize = '24px';
-        optionsButton.style.cursor = 'pointer';
-        this.menuItems.push(optionsButton);
-
-        menuItemsContainer.appendChild(playOption);
-        menuItemsContainer.appendChild(optionsButton);
-
-        // Add blink animation style
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes blink {
-                0% { opacity: 1; }
-                50% { opacity: 0; }
-                100% { opacity: 1; }
-            }
-            .selected {
-                animation: blink 1s infinite;
-                color: white !important;
-            }
-        `;
-        document.head.appendChild(style);
-
-        middleSection.appendChild(title);
-        middleSection.appendChild(menuItemsContainer);
-
-        // Create bottom section for credits
-        const credits = document.createElement('div');
-        credits.innerHTML = `
-            <div style="text-align: center; color: #00bfff; font-size: 14px;">
-                RICARDO FREITAS<br> Rodrigo Venâncio<br> Alexandre Ferreira<br> 
-                © 2025
-            </div>
-        `;
-
-        // Add all sections to menu
-        this.menuContainer.appendChild(topSection);
-        this.menuContainer.appendChild(middleSection);
-        this.menuContainer.appendChild(credits);
-
-        // Add menu to document
-        document.body.appendChild(this.menuContainer);
-
-        // Create pause menu (hidden initially)
-        this.createPauseMenu();
-
-        // Add keyboard controls
-        this.setupKeyboardControls();
-
-        // Initialize selection
-        this.updateSelection();
+    setupEventListeners() {
+        document.removeEventListener('keydown', this._keydownHandler);
+        document.addEventListener('keydown', this._keydownHandler);
+        console.log('[MENU] Listeners de teclado adicionados');
     }
 
-    setupKeyboardControls() {
-        document.addEventListener('keydown', (e) => {
-            if (!this.menuContainer || this.menuContainer.style.display === 'none') return;
-
-            switch (e.key) {
-                case 'ArrowUp':
-                    this.currentSelection = Math.max(0, this.currentSelection - 1);
-                    this.updateSelection();
-                    break;
-                case 'ArrowDown':
-                    this.currentSelection = Math.min(this.menuItems.length - 1, this.currentSelection + 1);
-                    this.updateSelection();
-                    break;
-                case 'Enter':
-                    this.selectCurrentOption();
-                    break;
-            }
-        });
-
-        // Add click handlers
-        this.menuItems.forEach((item, index) => {
-            item.addEventListener('click', () => {
-                this.currentSelection = index;
-                this.updateSelection();
-                this.selectCurrentOption();
-            });
-
-            // Add hover effect
-            item.addEventListener('mouseover', () => {
-                this.currentSelection = index;
-                this.updateSelection();
-            });
-        });
+    navigateMenu(direction) {
+        const items = this.menuItems;
+        if (items.length === 0) return;
+        
+        // Deactivate current item
+        this.setMenuItemInactive(items[this.currentSelection]);
+        
+        // Update selection
+        this.currentSelection = (this.currentSelection + direction + items.length) % items.length;
+        
+        // Activate new item
+        this.setMenuItemActive(items[this.currentSelection]);
     }
 
-    updateSelection() {
-        this.menuItems.forEach((item, index) => {
-            if (index === this.currentSelection) {
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-        });
-    }
-
-    selectCurrentOption() {
-        switch (this.currentSelection) {
-            case 0: // PLAY
-                console.log('Player selected PLAY option');
-                
-                // Garantir que o canvas do jogo está visível primeiro
-                if (this.game && this.game.renderer) {
-                    const canvas = this.game.renderer.domElement;
-                    canvas.style.display = 'block';
-                    canvas.style.zIndex = '0';
-                    
-                    // Renderizar um frame para verificar se está funcionando
-                    if (this.game.scene && this.game.camera) {
-                        console.log('Forçando renderização inicial');
-                        this.game.renderer.render(this.game.scene, this.game.camera);
-                    }
-                }
-                
-                // Agora esconder o menu e iniciar o jogo
-                this.hideMenu();
-                this.initializeGame();
-                break;
-            case 1: // OPTIONS
-                console.log('Player selected OPTIONS');
-                this.showOptionsMenu();
-                break;
+    selectCurrentItem() {
+        const currentItem = this.menuItems[this.currentSelection];
+        if (currentItem && currentItem.click) {
+            currentItem.click();
         }
     }
 
-    showOptionsMenu() {
-        // Save current menu content
-        const mainContent = this.menuContainer.innerHTML;
+    handleKeyPress(e) {
+        console.log('[MENU] Tecla pressionada:', e.key);
+        if (e.key === 'Escape') {
+            if (this.game && this.game.isRunning && !this.game.isPaused) {
+                this.showPauseMenu();
+            } else if (this.isPauseVisible) {
+                this.hidePauseMenu();
+                if (this.game) {
+                    this.game.resume();
+                }
+            }
+        } else if (this.isVisible || this.isPauseVisible) {
+            switch(e.key) {
+                case 'ArrowUp':
+                    this.navigateMenu(-1);
+                    break;
+                case 'ArrowDown':
+                    this.navigateMenu(1);
+                    break;
+                case 'Enter':
+                    this.selectCurrentItem();
+                    break;
+            }
+        }
+    }
 
-        // Create options menu content
+    init() {
+        try {
+            console.log('Initializing game menu...');
+            // Só cria os elementos se ainda não existem
+            if (!this.menuContainer) {
+                this.createMainMenu();
+            }
+            if (!this.pauseMenu) {
+                this.createPauseMenu();
+            }
+            this.showMenu();
+            console.log('Menu initialization complete');
+        } catch (error) {
+            console.error('Error initializing menu:', error);
+            throw error;
+        }
+    }
+
+    createMainMenu() {
+        this.menuContainer = document.createElement('div');
+        this.setupMenuContainer(this.menuContainer);
+
+        // Create sections
+        const topSection = this.createTopSection();
+        const middleSection = this.createMiddleSection();
+        const bottomSection = this.createBottomSection();
+
+        this.menuContainer.appendChild(topSection);
+        this.menuContainer.appendChild(middleSection);
+        this.menuContainer.appendChild(bottomSection);
+        
+        document.body.appendChild(this.menuContainer);
+    }
+
+    setupMenuContainer(container) {
+        Object.assign(container.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(20,0,40,0.95) 100%)',
+            display: 'none',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '40px 0',
+            zIndex: '1000',
+            fontFamily: "'Press Start 2P', monospace",
+            backdropFilter: 'blur(5px)',
+            boxSizing: 'border-box'
+        });
+
+        // Add resize handler
+        window.addEventListener('resize', () => this.handleResize());
+        this.handleResize();
+    }
+
+    handleResize() {
+        if (!this.menuContainer) return;
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // Adjust font sizes based on screen size
+        const baseFontSize = Math.min(width, height) * 0.05; // 5% of the smaller dimension
+        
+        // Update title font size
+        const titleElements = this.menuContainer.querySelectorAll('div[style*="font-size: 48px"]');
+        titleElements.forEach(el => {
+            el.style.fontSize = `${Math.min(baseFontSize, 48)}px`;
+        });
+        
+        // Update menu items font size
+        const menuItems = this.menuContainer.querySelectorAll('div[style*="font-size: 24px"]');
+        menuItems.forEach(el => {
+            el.style.fontSize = `${Math.min(baseFontSize * 0.5, 24)}px`;
+        });
+        
+        // Update instructions font size
+        const instructions = this.menuContainer.querySelector('div[style*="font-size: 16px"]');
+        if (instructions) {
+            instructions.style.fontSize = `${Math.min(baseFontSize * 0.33, 16)}px`;
+        }
+    }
+
+    createTopSection() {
+        const section = document.createElement('div');
+        Object.assign(section.style, {
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            padding: '0 40px'
+        });
+
+        const highScoreDisplay = this.createScoreElement('HI-SCORE: 0');
+        section.appendChild(highScoreDisplay);
+        
+        return section;
+    }
+
+    createScoreElement(text) {
+        const element = document.createElement('div');
+        Object.assign(element.style, {
+            color: '#FFD700',
+            fontSize: '24px'
+        });
+        element.textContent = text;
+        return element;
+    }
+
+    createMiddleSection() {
+        const section = document.createElement('div');
+        section.style.textAlign = 'center';
+
+        // Add title
+        section.appendChild(this.createTitle());
+
+        // Add menu items
+        const menuItemsContainer = this.createMenuItems();
+        section.appendChild(menuItemsContainer);
+
+        return section;
+    }
+
+    createTitle() {
+        const title = document.createElement('div');
+        title.innerHTML = `
+            <div style="text-align: center; margin-bottom: 40px;">
+                <div style="font-size: 48px; letter-spacing: 4px; margin-bottom: 10px; color: #ff69b4; text-shadow: 0 0 10px rgba(255,105,180,0.5); animation: glow 2s ease-in-out infinite alternate;">DONKEY</div>
+                <div style="font-size: 48px; letter-spacing: 4px; color: #ff69b4; text-shadow: 0 0 10px rgba(255,105,180,0.5); animation: glow 2s ease-in-out infinite alternate 0.5s;">KONG</div>
+                <div style="font-size: 48px; letter-spacing: 4px; color: #ff69b4; text-shadow: 0 0 10px rgba(255,105,180,0.5); animation: glow 2s ease-in-out infinite alternate 1s;">3D</div>
+            </div>
+            <style>
+                @keyframes glow {
+                    from {
+                        text-shadow: 0 0 10px rgba(255,105,180,0.5);
+                    }
+                    to {
+                        text-shadow: 0 0 20px rgba(255,105,180,0.8),
+                                   0 0 30px rgba(255,105,180,0.6),
+                                   0 0 40px rgba(255,105,180,0.4);
+                    }
+                }
+            </style>
+        `;
+        return title;
+    }
+
+    createMenuItems() {
+        const container = document.createElement('div');
+        Object.assign(container.style, {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            alignItems: 'center',
+            minWidth: '200px'
+        });
+
+        // Create menu items
+        const items = [
+            { text: 'PLAY', action: () => this.startGame() },
+            { text: 'OPTIONS', action: () => this.showOptions() },
+            { text: 'CREDITS', action: () => this.showCredits() }
+        ];
+
+        this.menuItems = [];
+        items.forEach((item, index) => {
+            const menuItem = this.createMenuItem(item.text, item.action);
+            container.appendChild(menuItem);
+            this.menuItems.push(menuItem);
+            
+            // Set first item as active by default
+            if (index === 0) {
+                this.setMenuItemActive(menuItem);
+                this.currentSelection = 0;
+            }
+        });
+
+        return container;
+    }
+
+    createMenuItem(text, onClick) {
+        const item = document.createElement('div');
+        Object.assign(item.style, {
+            color: '#ffffff',
+            fontSize: '24px',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            textShadow: '2px 2px 0px rgba(0, 0, 0, 0.5)',
+            padding: '10px 20px',
+            margin: '5px 0',
+            position: 'relative',
+            overflow: 'hidden'
+        });
+        
+        item.textContent = text;
+        
+        // Add hover events
+        item.addEventListener('mouseover', () => {
+            this.setMenuItemActive(item);
+        });
+        
+        item.addEventListener('mouseout', () => {
+            if (this.menuItems[this.currentSelection] !== item) {
+                this.setMenuItemInactive(item);
+            }
+        });
+        
+        item.addEventListener('click', onClick);
+        
+        return item;
+    }
+
+    setMenuItemActive(item) {
+        Object.assign(item.style, {
+            color: '#ff69b4',
+            transform: 'scale(1.1)',
+            textShadow: '0 0 10px rgba(255,105,180,0.8)',
+            letterSpacing: '2px'
+        });
+    }
+
+    setMenuItemInactive(item) {
+        Object.assign(item.style, {
+            color: '#ffffff',
+            transform: 'scale(1)',
+            textShadow: '2px 2px 0px rgba(0, 0, 0, 0.5)',
+            letterSpacing: '0px'
+        });
+    }
+
+    createBottomSection() {
+        const section = document.createElement('div');
+        section.style.textAlign = 'center';
+        
+        const instructions = document.createElement('div');
+        instructions.textContent = 'PRESS ENTER TO START';
+        Object.assign(instructions.style, {
+            color: '#ffffff',
+            fontSize: '16px',
+            opacity: '0.8'
+        });
+        
+        section.appendChild(instructions);
+        return section;
+    }
+
+    checkGameState() {
+        if (!this.game) {
+            console.error('[MENU] Game instance is not available');
+            return false;
+        }
+        
+        if (!this.game.isRunning && !this.isVisible) {
+            console.warn('[MENU] Game is not running and menu is not visible');
+            return false;
+        }
+        
+        return true;
+    }
+
+    startGame() {
+        console.log('Menu: Starting game...');
+        if (!this.checkGameState()) {
+            console.error('[MENU] Cannot start game: invalid game state');
+            return;
+        }
+        
+        // Esconder o menu primeiro
+        this.hideMenu();
+        
+        // Garantir que o jogo está inicializado
+        if (!this.game.scene) {
+            console.log('Initializing game scene...');
+            this.game.init().then(() => {
+                console.log('Game scene initialized, starting game...');
+                this.game.start();
+            }).catch(error => {
+                console.error('Error initializing game:', error);
+                this.showMenu(); // Voltar ao menu em caso de erro
+            });
+        } else {
+            console.log('Game scene already initialized, starting game...');
+            this.game.start();
+        }
+    }
+
+    showMenu() {
+        console.log('Showing main menu');
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+        window.focus();
+        if (this.menuContainer) {
+            this.menuContainer.style.display = 'flex';
+            this.isVisible = true;
+            this.isPauseVisible = false;
+            if (this.pauseMenu) {
+                this.pauseMenu.style.display = 'none';
+            }
+            if (this.menuItems && this.menuItems[0]) {
+                this.menuItems.forEach(item => this.setMenuItemInactive(item));
+                this.setMenuItemActive(this.menuItems[0]);
+                this.currentSelection = 0;
+            }
+        }
+        this.setupEventListeners();
+    }
+
+    hideMenu() {
+        console.log('Hiding menu');
+        if (this.menuContainer) {
+            this.menuContainer.style.display = 'none';
+            this.isVisible = false;
+        }
+        document.removeEventListener('keydown', this._keydownHandler);
+        console.log('[MENU] Listeners de teclado removidos');
+    }
+
+    createPauseMenu() {
+        this.pauseMenu = document.createElement('div');
+        Object.assign(this.pauseMenu.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(135deg, #1a0020 0%, #2a003a 100%)',
+            display: 'none',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '1000',
+            fontFamily: "'Press Start 2P', monospace",
+            backdropFilter: 'blur(5px)'
+        });
+
+        // Título PAUSED
+        const pauseTitle = document.createElement('div');
+        pauseTitle.textContent = 'PAUSED';
+        Object.assign(pauseTitle.style, {
+            color: '#ff69b4',
+            fontSize: '56px',
+            marginBottom: '60px',
+            textShadow: '0 0 16px #ff69b4, 0 0 32px #000',
+            letterSpacing: '2px',
+            textAlign: 'center'
+        });
+
+        // Opções do menu de pausa
+        const pauseOptions = document.createElement('div');
+        Object.assign(pauseOptions.style, {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '32px',
+            alignItems: 'center'
+        });
+
+        // Helper para criar cada opção
+        const createPauseOption = (text, onClick) => {
+            const option = document.createElement('div');
+            option.textContent = text;
+            Object.assign(option.style, {
+                color: '#fff',
+                fontSize: '32px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                textShadow: '2px 2px 0 #000, 0 0 8px #ff69b4',
+                padding: '8px 32px',
+                borderRadius: '8px',
+                userSelect: 'none'
+            });
+            option.addEventListener('mouseover', () => {
+                option.style.color = '#ff69b4';
+                option.style.transform = 'scale(1.08)';
+                option.style.textShadow = '0 0 16px #ff69b4, 0 0 32px #fff';
+            });
+            option.addEventListener('mouseout', () => {
+                option.style.color = '#fff';
+                option.style.transform = 'scale(1)';
+                option.style.textShadow = '2px 2px 0 #000, 0 0 8px #ff69b4';
+            });
+            option.addEventListener('click', onClick);
+            return option;
+        };
+
+        // Opções
+        const resumeOption = createPauseOption('RESUME', () => {
+            this.hidePauseMenu();
+            if (this.game) this.game.resume();
+        });
+        const menuOption = createPauseOption('MAIN MENU', () => {
+            this.hidePauseMenu();
+            if (this.game) this.game.returnToMainMenu();
+        });
+        const exitOption = createPauseOption('EXIT', () => {
+            this.hidePauseMenu();
+            if (this.game) this.game.exitGame();
+        });
+
+        pauseOptions.appendChild(resumeOption);
+        pauseOptions.appendChild(menuOption);
+        pauseOptions.appendChild(exitOption);
+
+        this.pauseMenu.appendChild(pauseTitle);
+        this.pauseMenu.appendChild(pauseOptions);
+
+        document.body.appendChild(this.pauseMenu);
+    }
+
+    showPauseMenu() {
+        if (!this.checkGameState()) {
+            console.error('[MENU] Cannot show pause menu: invalid game state');
+            return;
+        }
+        
+        if (this.pauseMenu) {
+            this.pauseMenu.style.display = 'flex';
+            this.isPauseVisible = true;
+            this.isVisible = false;
+            if (this.menuContainer) {
+                this.menuContainer.style.display = 'none';
+            }
+        }
+    }
+
+    hidePauseMenu() {
+        if (this.pauseMenu) {
+            this.pauseMenu.style.display = 'none';
+            this.isPauseVisible = false;
+        }
+    }
+
+    showOptions() {
+        this.menuContainer.innerHTML = '';
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+        window.focus();
         const optionsContent = document.createElement('div');
-        optionsContent.style.color = 'white';
-        optionsContent.style.textAlign = 'center';
         optionsContent.style.display = 'flex';
         optionsContent.style.flexDirection = 'column';
         optionsContent.style.alignItems = 'center';
-        optionsContent.style.gap = '20px';
-        optionsContent.style.padding = '20px';
+        optionsContent.style.gap = '40px';
 
-        // Create title
-        const title = document.createElement('h2');
+        const title = document.createElement('div');
         title.textContent = 'OPTIONS';
-        title.style.fontSize = '32px';
-        title.style.marginBottom = '40px';
         title.style.color = '#ff69b4';
+        title.style.fontSize = '48px';
+        title.style.marginBottom = '40px';
 
-        // Create options container
         const optionsContainer = document.createElement('div');
         optionsContainer.style.display = 'flex';
         optionsContainer.style.flexDirection = 'column';
         optionsContainer.style.gap = '20px';
-        optionsContainer.style.width = '300px';
 
-        // Create sensitivity option
+        // Mouse sensitivity option
         const sensitivityDiv = document.createElement('div');
-        sensitivityDiv.style.display = 'flex';
-        sensitivityDiv.style.flexDirection = 'column';
-        sensitivityDiv.style.alignItems = 'center';
-        sensitivityDiv.style.gap = '10px';
-
-        const sensitivityLabel = document.createElement('label');
+        const sensitivityLabel = document.createElement('div');
         sensitivityLabel.textContent = `Mouse Sensitivity: ${Math.round(this.options.sensitivity * 5000)}`;
-        sensitivityLabel.style.fontSize = '16px';
+        sensitivityLabel.style.color = '#ffffff';
+        sensitivityLabel.style.marginBottom = '10px';
 
         const sensitivitySlider = document.createElement('input');
         sensitivitySlider.type = 'range';
         sensitivitySlider.min = '1';
-        sensitivitySlider.max = '10';
+        sensitivitySlider.max = '20';
         sensitivitySlider.value = this.options.sensitivity * 5000;
         sensitivitySlider.style.width = '200px';
-        sensitivitySlider.style.cursor = 'pointer';
 
         sensitivityDiv.appendChild(sensitivityLabel);
         sensitivityDiv.appendChild(sensitivitySlider);
 
-        // Create volume option
+        // Volume option
         const volumeDiv = document.createElement('div');
-        volumeDiv.style.display = 'flex';
-        volumeDiv.style.flexDirection = 'column';
-        volumeDiv.style.alignItems = 'center';
-        volumeDiv.style.gap = '10px';
-
-        const volumeLabel = document.createElement('label');
+        const volumeLabel = document.createElement('div');
         volumeLabel.textContent = `Volume: ${Math.round(this.options.volume * 100)}%`;
-        volumeLabel.style.fontSize = '16px';
+        volumeLabel.style.color = '#ffffff';
+        volumeLabel.style.marginBottom = '10px';
 
         const volumeSlider = document.createElement('input');
         volumeSlider.type = 'range';
@@ -290,55 +572,32 @@ export class GameMenu {
         volumeSlider.max = '100';
         volumeSlider.value = this.options.volume * 100;
         volumeSlider.style.width = '200px';
-        volumeSlider.style.cursor = 'pointer';
 
         volumeDiv.appendChild(volumeLabel);
         volumeDiv.appendChild(volumeSlider);
 
-        // Create fullscreen option
-        const fullscreenDiv = document.createElement('div');
-        fullscreenDiv.style.display = 'flex';
-        fullscreenDiv.style.alignItems = 'center';
-        fullscreenDiv.style.gap = '10px';
-        fullscreenDiv.style.cursor = 'pointer';
-
-        const fullscreenCheckbox = document.createElement('input');
-        fullscreenCheckbox.type = 'checkbox';
-        fullscreenCheckbox.checked = this.options.fullscreen;
-        fullscreenCheckbox.style.cursor = 'pointer';
-
-        const fullscreenLabel = document.createElement('label');
-        fullscreenLabel.textContent = 'Fullscreen';
-        fullscreenLabel.style.fontSize = '16px';
-        fullscreenLabel.style.cursor = 'pointer';
-
-        fullscreenDiv.appendChild(fullscreenCheckbox);
-        fullscreenDiv.appendChild(fullscreenLabel);
-
-        // Create back button
+        // Back button
         const backButton = document.createElement('button');
-        backButton.textContent = 'Back to Menu';
-        backButton.style.marginTop = '20px';
+        backButton.textContent = 'Back';
+        backButton.style.marginTop = '40px';
         backButton.style.padding = '10px 20px';
-        backButton.style.backgroundColor = '#4CAF50';
-        backButton.style.border = 'none';
-        backButton.style.color = 'white';
+        backButton.style.fontSize = '20px';
         backButton.style.cursor = 'pointer';
-        backButton.style.fontSize = '16px';
+        backButton.style.backgroundColor = '#ff69b4';
+        backButton.style.border = 'none';
+        backButton.style.color = '#ffffff';
         backButton.style.borderRadius = '5px';
+        backButton.addEventListener('click', () => {
+            this.showMenu();
+        });
 
-        // Add all options to container
         optionsContainer.appendChild(sensitivityDiv);
         optionsContainer.appendChild(volumeDiv);
-        optionsContainer.appendChild(fullscreenDiv);
         optionsContainer.appendChild(backButton);
 
-        // Add all elements to options content
         optionsContent.appendChild(title);
         optionsContent.appendChild(optionsContainer);
 
-        // Clear and add options content
-        this.menuContainer.innerHTML = '';
         this.menuContainer.appendChild(optionsContent);
 
         // Add event listeners
@@ -355,407 +614,104 @@ export class GameMenu {
             const value = e.target.value;
             volumeLabel.textContent = `Volume: ${value}%`;
             this.options.volume = value / 100;
-            if (this.game.audio) {
-                this.game.audio.setVolume(this.options.volume);
+            if (this.game.soundManager) {
+                this.game.soundManager.setVolume(this.options.volume);
             }
         });
+    }
 
-        fullscreenDiv.addEventListener('click', () => {
-            fullscreenCheckbox.checked = !fullscreenCheckbox.checked;
-            this.options.fullscreen = fullscreenCheckbox.checked;
-            if (this.options.fullscreen) {
-                if (document.documentElement.requestFullscreen) {
-                    document.documentElement.requestFullscreen();
-                } else if (document.documentElement.webkitRequestFullscreen) {
-                    document.documentElement.webkitRequestFullscreen();
-                } else if (document.documentElement.msRequestFullscreen) {
-                    document.documentElement.msRequestFullscreen();
-                }
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
-            }
-        });
+    showCredits() {
+        this.menuContainer.innerHTML = '';
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+        window.focus();
+        const creditsContent = document.createElement('div');
+        creditsContent.style.display = 'flex';
+        creditsContent.style.flexDirection = 'column';
+        creditsContent.style.alignItems = 'center';
+        creditsContent.style.color = '#ffffff';
+        creditsContent.style.gap = '20px';
 
+        const title = document.createElement('div');
+        title.textContent = 'CREDITS';
+        title.style.color = '#ff69b4';
+        title.style.fontSize = '48px';
+        title.style.marginBottom = '40px';
+
+        const credits = document.createElement('div');
+        credits.style.textAlign = 'center';
+        credits.style.fontSize = '20px';
+        credits.style.lineHeight = '1.5';
+        credits.innerHTML = `
+            Game Design<br>
+            <span style="color: #ff69b4;">Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas</span><br><br>
+            Programming<br>
+            <span style="color: #ff69b4;">Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas</span><br><br>
+            Art & Animation<br>
+            <span style="color: #ff69b4;">Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas</span><br><br>
+            Music & Sound<br>
+            <span style="color: #ff69b4;">Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas</span><br><br>
+        `;
+
+        const backButton = document.createElement('button');
+        backButton.textContent = 'Back';
+        backButton.style.marginTop = '40px';
+        backButton.style.padding = '10px 20px';
+        backButton.style.fontSize = '20px';
+        backButton.style.cursor = 'pointer';
+        backButton.style.backgroundColor = '#ff69b4';
+        backButton.style.border = 'none';
+        backButton.style.color = '#ffffff';
+        backButton.style.borderRadius = '5px';
         backButton.addEventListener('click', () => {
-            // Restore the main menu content
-            this.menuContainer.innerHTML = mainContent;
-            
-            // Reattach event listeners to menu items
-            this.menuItems = Array.from(this.menuContainer.querySelectorAll('div[style*="cursor: pointer"]'));
-            this.setupKeyboardControls();
-            
-            // Reset and update selection
-            this.currentSelection = 0;
-            this.updateSelection();
-            
-            // Show the menu
             this.showMenu();
         });
+
+        creditsContent.appendChild(title);
+        creditsContent.appendChild(credits);
+        creditsContent.appendChild(backButton);
+
+        this.menuContainer.appendChild(creditsContent);
     }
 
-    async initializeGame() {
-        try {
-            console.log('Iniciando processo de inicialização do jogo...');
-            
-            // Esconder o menu
-            this.hideMenu();
-            
-            // Inicializar o canvas do jogo
-            const canvas = this.game.renderer ? this.game.renderer.domElement : null;
-            
-            // Initialize the game scene first
-            if (!this.game.scene) {
-                console.log('Inicializando cena do jogo...');
-                await this.game.init();
-                console.log('Cena inicializada com sucesso');
-            }
-            
-            // Garantir que o canvas está visível
-            if (this.game.renderer && this.game.renderer.domElement) {
-                this.game.renderer.domElement.style.display = 'block';
-                this.game.renderer.domElement.style.zIndex = '1';
-            }
-
-            console.log('Inicializando nível e jogador...');
-            
-            try {
-                // Initialize level and player but don't start movement yet
-                if (!this.game.level) {
-                    console.log('Criando nível...');
-                    this.game.level = new Level(this.game.scene);
-                    
-                    // Atribuir a referência do game ao nível
-                    this.game.level.game = this.game;
-                }
-                
-                if (!this.game.player) {
-                    console.log('Criando jogador...');
-                    this.game.player = new Player(this.game.scene, this.game.camera);
-                    console.log('Jogador criado, aguardando carregamento do modelo...');
-                    
-                    // Atribuir a referência do jogador ao nível
-                    if (this.game.level) {
-                        this.game.level.player = this.game.player;
-                    }
-                    
-                    // Esperar o modelo do jogador carregar com timeout
-                    let loadingAttempts = 0;
-                    const maxAttempts = 30; // 3 segundos máximo
-                    
-                    await new Promise((resolve, reject) => {
-                        const checkLoaded = () => {
-                            if (this.game.player.isLoaded) {
-                                console.log('Modelo do jogador carregado com sucesso');
-                                resolve();
-                            } else {
-                                loadingAttempts++;
-                                console.log(`Aguardando carregamento do modelo... (Tentativa ${loadingAttempts}/${maxAttempts})`);
-                                
-                                if (loadingAttempts >= maxAttempts) {
-                                    console.error('Tempo limite excedido para carregar o modelo do jogador');
-                                    reject(new Error('Tempo limite excedido para carregar o modelo do jogador'));
-                                } else {
-                                    setTimeout(checkLoaded, 100);
-                                }
-                            }
-                        };
-                        checkLoaded();
-                    });
-                }
-            } catch (initError) {
-                console.error('Erro ao criar nível ou jogador:', initError);
-                throw new Error('Falha ao inicializar nível ou jogador: ' + initError.message);
-            }
-
-            // Garantir que o jogo está visível
-            if (this.game.scene) {
-                this.game.scene.visible = true;
-            }
-            
-            // Forçar uma renderização para garantir que algo seja mostrado
-            if (this.game.renderer && this.game.scene && this.game.camera) {
-                this.game.renderer.render(this.game.scene, this.game.camera);
-            }
-
-            // Set player to idle animation and initial position
-            if (this.game.player && this.game.player.animations && this.game.player.animations['idle']) {
-                console.log('Iniciando animação idle...');
-                this.game.player.playAnimation('idle');
-            }
-
-            console.log('Iniciando contagem regressiva...');
-            // Start the countdown sequence after everything is loaded
-            await this.game.startCountdown();
-        } catch (error) {
-            console.error('Erro durante a inicialização do jogo:', error);
-            // Mostrar mensagem de erro para o usuário
-            const errorMessage = document.createElement('div');
-            errorMessage.style.position = 'fixed';
-            errorMessage.style.top = '50%';
-            errorMessage.style.left = '50%';
-            errorMessage.style.transform = 'translate(-50%, -50%)';
-            errorMessage.style.color = 'red';
-            errorMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-            errorMessage.style.padding = '20px';
-            errorMessage.style.fontFamily = "'Press Start 2P', monospace";
-            errorMessage.style.fontSize = '16px';
-            errorMessage.style.textAlign = 'center';
-            errorMessage.style.zIndex = '2000';
-            errorMessage.innerHTML = `ERRO AO INICIAR JOGO<br>Por favor, recarregue a página`;
-            document.body.appendChild(errorMessage);
-            
-            // Mostrar o menu novamente após 3 segundos
-            setTimeout(() => {
-                document.location.reload(); // Recarregar a página para resolver problemas de estado
-            }, 3000);
-        }
-    }
-
-    hideMenu() {
-        if (this.menuContainer) {
-            this.menuContainer.style.display = 'none';
+    dispose() {
+        // Remove keyboard listener
+        document.removeEventListener('keydown', this._keydownHandler);
+        
+        // Remove all event listeners from menu items
+        if (this.menuItems) {
+            this.menuItems.forEach(item => {
+                const clone = item.cloneNode(true);
+                item.parentNode.replaceChild(clone, item);
+            });
         }
         
-        // Garantir que o canvas do jogo está visível
-        if (this.game && this.game.renderer) {
-            const canvas = this.game.renderer.domElement;
-            canvas.style.display = 'block';
-            canvas.style.zIndex = '0';
-        }
-    }
-
-    showMenu() {
-        console.log('Showing main menu...');
-        if (this.menuContainer) {
-            // Ensure menu is in the DOM
-            if (!document.body.contains(this.menuContainer)) {
-                document.body.appendChild(this.menuContainer);
-            }
-            
-            // Reset menu state
-            this.currentSelection = 0;
-            
-            // Show menu and update selection
-            this.menuContainer.style.display = 'flex';
-            this.updateSelection();
-            
-            // Ensure menu is on top
-            this.menuContainer.style.zIndex = '9999';
-            
-            // Reset any game-specific elements
-            const scoreElement = document.getElementById('score');
-            if (scoreElement) {
-                scoreElement.style.display = 'none';
-            }
-        } else {
-            console.log('Creating new menu...');
-            this.init();
-        }
-    }
-
-    createPauseMenu() {
-        // Remove existing pause menu if it exists
+        // Remove all event listeners from pause menu options
         if (this.pauseMenu) {
-            document.body.removeChild(this.pauseMenu);
-        }
-
-        this.pauseMenu = document.createElement('div');
-        this.pauseMenu.style.position = 'fixed';
-        this.pauseMenu.style.top = '0';
-        this.pauseMenu.style.left = '0';
-        this.pauseMenu.style.width = '100%';
-        this.pauseMenu.style.height = '100%';
-        this.pauseMenu.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
-        this.pauseMenu.style.display = 'none';
-        this.pauseMenu.style.flexDirection = 'column';
-        this.pauseMenu.style.alignItems = 'center';
-        this.pauseMenu.style.justifyContent = 'center';
-        this.pauseMenu.style.zIndex = '9999';
-        this.pauseMenu.style.fontFamily = "'Press Start 2P', monospace";
-        this.pauseMenu.style.pointerEvents = 'auto';
-
-        // Create pause title
-        const pauseTitle = document.createElement('div');
-        pauseTitle.textContent = 'PAUSED';
-        pauseTitle.style.color = '#ff69b4';
-        pauseTitle.style.fontSize = '48px';
-        pauseTitle.style.marginBottom = '60px';
-        pauseTitle.style.textShadow = '4px 4px 0px rgba(0, 0, 0, 0.5)';
-
-        // Create pause menu options container
-        const pauseOptions = document.createElement('div');
-        pauseOptions.style.display = 'flex';
-        pauseOptions.style.flexDirection = 'column';
-        pauseOptions.style.gap = '30px';
-        pauseOptions.style.alignItems = 'center';
-
-        // Create pause menu options
-        const resumeOption = document.createElement('div');
-        resumeOption.textContent = 'RESUME';
-        resumeOption.style.color = '#ffffff';
-        resumeOption.style.fontSize = '24px';
-        resumeOption.style.cursor = 'pointer';
-        resumeOption.style.textShadow = '2px 2px 0px rgba(0, 0, 0, 0.5)';
-        resumeOption.addEventListener('click', () => this.resumeGame());
-
-        const menuOption = document.createElement('div');
-        menuOption.textContent = 'RETURN TO MENU';
-        menuOption.style.color = '#ffffff';
-        menuOption.style.fontSize = '24px';
-        menuOption.style.cursor = 'pointer';
-        menuOption.style.textShadow = '2px 2px 0px rgba(0, 0, 0, 0.5)';
-        menuOption.addEventListener('click', () => this.returnToMainMenu());
-
-        const exitOption = document.createElement('div');
-        exitOption.textContent = 'EXIT';
-        exitOption.style.color = '#ffffff';
-        exitOption.style.fontSize = '24px';
-        exitOption.style.cursor = 'pointer';
-        exitOption.style.textShadow = '2px 2px 0px rgba(0, 0, 0, 0.5)';
-        exitOption.addEventListener('click', () => this.exitGame());
-
-        // Add hover and selection effects
-        [resumeOption, menuOption, exitOption].forEach(option => {
-            option.addEventListener('mouseover', () => {
-                option.style.color = '#ff69b4';
-                option.classList.add('selected');
+            const pauseOptions = this.pauseMenu.querySelectorAll('div[style*="cursor: pointer"]');
+            pauseOptions.forEach(option => {
+                const clone = option.cloneNode(true);
+                option.parentNode.replaceChild(clone, option);
             });
-            option.addEventListener('mouseout', () => {
-                if (!option.classList.contains('selected')) {
-                    option.style.color = '#ffffff';
-                }
-            });
-        });
-
-        // Add options to container
-        pauseOptions.appendChild(resumeOption);
-        pauseOptions.appendChild(menuOption);
-        pauseOptions.appendChild(exitOption);
-
-        // Add elements to pause menu
-        this.pauseMenu.appendChild(pauseTitle);
-        this.pauseMenu.appendChild(pauseOptions);
-
-        // Add pause menu to document
-        document.body.appendChild(this.pauseMenu);
-
-        // Add keyboard navigation for pause menu
-        this.setupPauseMenuKeyboardControls([resumeOption, menuOption, exitOption]);
-    }
-
-    setupPauseMenuKeyboardControls(options) {
-        const handleKeydown = (e) => {
-            if (!this.pauseMenu || this.pauseMenu.style.display === 'none') return;
-
-            let currentIndex = options.findIndex(opt => opt.classList.contains('selected'));
-            if (currentIndex === -1) currentIndex = 0;
-
-            switch (e.key) {
-                case 'ArrowUp':
-                    currentIndex = (currentIndex - 1 + options.length) % options.length;
-                    break;
-                case 'ArrowDown':
-                    currentIndex = (currentIndex + 1) % options.length;
-                    break;
-                case 'Enter':
-                    options[currentIndex].click();
-                    break;
-                case 'Escape':
-                    this.resumeGame();
-                    break;
-            }
-
-            options.forEach((opt, i) => {
-                if (i === currentIndex) {
-                    opt.style.color = '#ff69b4';
-                    opt.classList.add('selected');
-                } else {
-                    opt.style.color = '#ffffff';
-                    opt.classList.remove('selected');
-                }
-            });
-        };
-
-        // Remove existing listener if any
-        if (this._pauseMenuKeyHandler) {
-            document.removeEventListener('keydown', this._pauseMenuKeyHandler);
-        }
-
-        this._pauseMenuKeyHandler = handleKeydown;
-        document.addEventListener('keydown', this._pauseMenuKeyHandler);
-    }
-
-    showPauseMenu() {
-        console.log('Showing pause menu...');
-        
-        // Remover qualquer instrução de clique existente
-        const instruction = document.getElementById('pointer-lock-instruction');
-        if (instruction) {
-            instruction.remove();
-            console.log('Removing instruction before showing pause menu');
         }
         
-        if (this.pauseMenu) {
-            // Ensure the menu is in the DOM
-            if (!document.body.contains(this.pauseMenu)) {
-                document.body.appendChild(this.pauseMenu);
-            }
-            this.pauseMenu.style.display = 'flex';
-            
-            // Reset selection to first option
-            const options = this.pauseMenu.querySelectorAll('div[style*="cursor: pointer"]');
-            options.forEach((opt, i) => {
-                if (i === 0) {
-                    opt.style.color = '#ff69b4';
-                    opt.classList.add('selected');
-                } else {
-                    opt.style.color = '#ffffff';
-                    opt.classList.remove('selected');
-                }
-            });
-        } else {
-            console.log('Creating pause menu...');
-            this.createPauseMenu();
-            this.showPauseMenu();
+        // Remove elements from DOM
+        if (this.menuContainer && this.menuContainer.parentNode) {
+            this.menuContainer.parentNode.removeChild(this.menuContainer);
         }
-    }
-
-    hidePauseMenu() {
-        console.log('Hiding pause menu...');
-        if (this.pauseMenu) {
-            this.pauseMenu.style.display = 'none';
-            // Remove from DOM to ensure it's completely hidden
-            if (document.body.contains(this.pauseMenu)) {
-                document.body.removeChild(this.pauseMenu);
-            }
-        }
-    }
-
-    resumeGame() {
-        // Remover qualquer instrução de clique existente
-        const instruction = document.getElementById('pointer-lock-instruction');
-        if (instruction) {
-            instruction.remove();
-            console.log('Removing instruction before resuming game');
+        if (this.pauseMenu && this.pauseMenu.parentNode) {
+            this.pauseMenu.parentNode.removeChild(this.pauseMenu);
         }
         
-        // Resumir o jogo
-        this.game.resume();
-    }
-
-    returnToMainMenu() {
-        console.log('Returning to landing page...');
-        // Reload the page to return to the initial state
-        window.location.reload();
-    }
-
-    exitGame() {
-        this.game.exitGame();
+        // Reset all state
+        this.menuContainer = null;
+        this.pauseMenu = null;
+        this.isVisible = false;
+        this.isPauseVisible = false;
+        this.menuItems = [];
+        this.currentSelection = 0;
+        
+        console.log('[MENU] Menu disposed successfully');
     }
 } 
