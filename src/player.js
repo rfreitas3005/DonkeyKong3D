@@ -17,6 +17,7 @@ export class Player {
         this.isJumping = false;
         this.lastJumpTime = 0; // Track last jump time
         this.jumpCooldown = 1.0; // 1 second cooldown
+        this.controlsEnabled = true; // Add controlsEnabled property
         
         // Reduced movement speeds
         this.moveSpeed = 0.075;
@@ -308,6 +309,11 @@ export class Player {
     }
 
     onKeyDown(event) {
+        // Only process key events if controls are enabled
+        if (!this.controlsEnabled) {
+            return;
+        }
+
         console.log('Key pressed:', event.key, event.code);
         
         // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
@@ -399,6 +405,11 @@ export class Player {
     }
 
     onKeyUp(event) {
+        // Only process key events if controls are enabled
+        if (!this.controlsEnabled) {
+            return;
+        }
+
         console.log('Key released:', event.key, event.code);
         
         // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
@@ -532,6 +543,11 @@ export class Player {
     }
 
     update(deltaTime) {
+        // Check if controls are enabled before processing any updates
+        if (!this.controlsEnabled) {
+            return;
+        }
+
         // Verificação inicial - se o jogador não estiver habilitado, não atualize nada
         if (!this.enabled) {
             return;
@@ -906,61 +922,15 @@ export class Player {
     // Add new method to enable controls
     enableControls() {
         console.log('Enabling player controls forcefully...');
-        this.enabled = true; // Definir como habilitado
-        
-        // Adicionar handler de teclas direto ao documento
-        this.handleKeyPress = (e) => {
-            if (e.type === 'keydown') {
-                this.onKeyDown(e);
-            } else if (e.type === 'keyup') {
-                this.onKeyUp(e);
-            }
-        };
-        
-        // Adicionar os event listeners
-        document.addEventListener('keydown', this.handleKeyPress);
-        document.addEventListener('keyup', this.handleKeyPress);
         
         try {
-            console.log('Attempting to enable pointer lock...');
+            // Remove any existing instructions
+            const elementsToRemove = document.querySelectorAll('#pointer-lock-instruction, .game-instructions, .click-instruction');
+            elementsToRemove.forEach(el => el.remove());
             
-            // Verificar se já existe uma instrução na tela
-            if (document.getElementById('pointer-lock-instruction')) {
-                console.log('Instruction element already exists, not creating a new one');
-                return;
-            }
-            
+            // Request pointer lock directly without showing instructions
             if (!document.pointerLockElement) {
-                // Exibir instrução de clique para o usuário
-                const instruction = document.createElement('div');
-                instruction.id = 'pointer-lock-instruction';
-                instruction.style.position = 'fixed';
-                instruction.style.top = '50%';
-                instruction.style.left = '50%';
-                instruction.style.transform = 'translate(-50%, -50%)';
-                instruction.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                instruction.style.color = 'white';
-                instruction.style.padding = '20px';
-                instruction.style.fontFamily = "'Press Start 2P', monospace";
-                instruction.style.zIndex = '10000';
-                instruction.style.textAlign = 'center';
-                instruction.innerHTML = 'CLIQUE NA TELA PARA JOGAR<br><br>Use WASD para mover<br>Espaço para pular';
-                
-                document.body.appendChild(instruction);
-                
-                // Adicionar event listener para o documento inteiro
-                const requestPointerLock = () => {
-                    document.body.requestPointerLock();
-                    
-                    // Remover a instrução e o listener após o clique
-                    const instructionElement = document.getElementById('pointer-lock-instruction');
-                    if (instructionElement) {
-                        instructionElement.remove();
-                    }
-                    document.removeEventListener('click', requestPointerLock);
-                };
-                
-                document.addEventListener('click', requestPointerLock);
+                document.body.requestPointerLock();
             }
         } catch (error) {
             console.error('Error enabling pointer lock:', error);

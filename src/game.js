@@ -25,7 +25,18 @@ export class Game {
         this.menu = new GameMenu(this);
         this.createCountdownElement();
 
-        // Add pause key listener
+        // Mod menu state
+        this.modMenuVisible = false;
+        this.mods = {
+            invincible: false,
+            speedBoost: false
+        };
+        this.selectedModIndex = 0; // Track which mod option is selected
+        
+        // Initialize mod menu
+        this.initModMenu();
+        
+        // Bind keyboard events for mod menu
         document.addEventListener('keydown', (e) => {
             // Pausar com tecla P
             if (e.key.toLowerCase() === 'p' && this.isRunning) {
@@ -41,6 +52,28 @@ export class Game {
                 if (!this.isPaused) {
                     console.log('ESC key pressed - pausing game');
                     this.pause();
+                }
+            }
+
+            // Toggle mod menu
+            if (e.key === 'Insert') {
+                this.toggleModMenu();
+            }
+
+            // Mod menu navigation
+            if (this.modMenuVisible) {
+                switch (e.key) {
+                    case 'ArrowUp':
+                        this.selectedModIndex = Math.max(0, this.selectedModIndex - 1);
+                        this.updateModMenuSelection();
+                        break;
+                    case 'ArrowDown':
+                        this.selectedModIndex = Math.min(Object.keys(this.mods).length - 1, this.selectedModIndex + 1);
+                        this.updateModMenuSelection();
+                        break;
+                    case 'Enter':
+                        this.toggleSelectedMod();
+                        break;
                 }
             }
         });
@@ -59,6 +92,174 @@ export class Game {
         this.countdownElement.style.zIndex = '1000';
         this.countdownElement.style.display = 'none';
         document.body.appendChild(this.countdownElement);
+    }
+
+    initModMenu() {
+        // Create mod menu container
+        const modMenu = document.createElement('div');
+        modMenu.id = 'mod-menu';
+        modMenu.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff0055;
+            border-radius: 10px;
+            padding: 20px;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            display: none;
+            z-index: 1000;
+        `;
+
+        // Create menu title
+        const title = document.createElement('h2');
+        title.textContent = 'Mod Menu';
+        title.style.cssText = `
+            margin: 0 0 20px 0;
+            color: #ff0055;
+            text-align: center;
+        `;
+        modMenu.appendChild(title);
+
+        // Create mod options
+        const modOptions = [
+            { name: 'invincible', label: 'Invincible', description: 'Toggle invincibility' },
+            { name: 'speedBoost', label: 'Speed Boost', description: 'Toggle increased movement speed' }
+        ];
+
+        modOptions.forEach((mod, index) => {
+            const modDiv = this.createModOption(mod.label, mod.name, mod.description);
+            modDiv.dataset.index = index;
+            modMenu.appendChild(modDiv);
+        });
+
+        document.body.appendChild(modMenu);
+        this.modMenuElement = modMenu;
+    }
+
+    createModOption(label, property, description) {
+        const container = document.createElement('div');
+        container.className = 'mod-option';
+        container.style.cssText = `
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        `;
+
+        const toggle = document.createElement('div');
+        toggle.style.cssText = `
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        `;
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = property;
+        checkbox.style.marginRight = '10px';
+
+        const labelElement = document.createElement('label');
+        labelElement.htmlFor = property;
+        labelElement.textContent = label;
+        labelElement.style.cursor = 'pointer';
+
+        const desc = document.createElement('div');
+        desc.textContent = description;
+        desc.style.cssText = `
+            font-size: 12px;
+            color: #888;
+        `;
+
+        toggle.appendChild(checkbox);
+        toggle.appendChild(labelElement);
+        container.appendChild(toggle);
+        container.appendChild(desc);
+
+        return container;
+    }
+
+    updateModMenuSelection() {
+        // Remove highlight from all options
+        const options = this.modMenuElement.querySelectorAll('.mod-option');
+        options.forEach(option => {
+            option.style.backgroundColor = 'transparent';
+        });
+
+        // Highlight selected option
+        const selectedOption = options[this.selectedModIndex];
+        if (selectedOption) {
+            selectedOption.style.backgroundColor = 'rgba(255, 0, 85, 0.3)';
+        }
+    }
+
+    toggleSelectedMod() {
+        const modNames = Object.keys(this.mods);
+        if (this.selectedModIndex >= 0 && this.selectedModIndex < modNames.length) {
+            const modName = modNames[this.selectedModIndex];
+            const checkbox = document.getElementById(modName);
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                this.mods[modName] = checkbox.checked;
+                this.applyMods();
+            }
+        }
+    }
+
+    toggleModMenu() {
+        this.modMenuVisible = !this.modMenuVisible;
+        if (this.modMenuElement) {
+            this.modMenuElement.style.display = this.modMenuVisible ? 'block' : 'none';
+            
+            if (this.modMenuVisible) {
+                // Reset selection to first option when opening menu
+                this.selectedModIndex = 0;
+                this.updateModMenuSelection();
+                
+                // Temporarily disable player controls
+                if (this.player) {
+                    this.player.controlsEnabled = false;
+                }
+
+                // Remove any remaining instructions
+                const elementsToRemove = document.querySelectorAll('.game-instructions, .click-instruction, #pointer-lock-instruction');
+                elementsToRemove.forEach(el => el.remove());
+
+                // Ensure mod menu is on top
+                this.modMenuElement.style.zIndex = '10000';
+            } else {
+                // Re-enable player controls when closing menu
+                if (this.player) {
+                    this.player.controlsEnabled = true;
+                    document.body.requestPointerLock();
+                }
+            }
+        }
+    }
+
+    applyMods() {
+        // Apply speed boost - 10x faster when enabled
+        if (this.player) {
+            // Base speed is 0.075, boost to 0.75 (10x faster)
+            this.player.moveSpeed = this.mods.speedBoost ? 0.75 : 0.075;
+            
+            // Also increase jump force and climb speed when speed boost is active
+            this.player.jumpForce = this.mods.speedBoost ? 0.7 : 0.35;
+            this.player.climbSpeed = this.mods.speedBoost ? 0.4 : 0.04;
+        }
+        
+        // Invincibility is checked in the collision detection logic
+    }
+
+    onPlayerHit(source) {
+        // Check for invincibility before applying damage
+        if (this.mods.invincible) {
+            return; // Player is invincible, ignore hit
+        }
+        
+        // ... rest of the existing hit logic ...
     }
 
     async init() {
@@ -245,13 +446,12 @@ export class Game {
         try {
             console.log('Starting gameplay...');
             
-            // Certificar que a cena está visível
             if (this.scene) {
                 this.scene.visible = true;
                 console.log('Scene visibility set to true');
             } else {
                 console.error('startGameplay: Scene is not defined!');
-                return; // Não continuar se a cena não existe
+                return;
             }
 
             // Enable player controls
@@ -259,7 +459,11 @@ export class Game {
                 console.log('Enabling player controls...');
                 this.player.enabled = true;
                 
-                // Adicionar listener de clique para todo o documento para ajudar com PointerLock
+                // Remove any existing instructions or overlays
+                const elementsToRemove = document.querySelectorAll('.game-instructions, .click-instruction, #pointer-lock-instruction');
+                elementsToRemove.forEach(el => el.remove());
+                
+                // Adicionar listener de clique simples
                 const enableGameClick = () => {
                     console.log('Document clicked, enabling player controls...');
                     this.player.enableControls();
@@ -268,43 +472,28 @@ export class Game {
                 
                 document.addEventListener('click', enableGameClick);
                 
-                // Tentar habilitar os controles, mas o usuário precisará clicar em breve
-                this.player.enableControls(); 
-                
-                // Forçar atualização da câmera imediatamente
-                console.log('Forcing initial camera update...');
-                this.player.updateCameraPosition(); 
+                this.player.enableControls();
+                this.player.updateCameraPosition();
             } else {
                 console.error('startGameplay: Player is not defined!');
-                return; // Não continuar se o jogador não existe
+                return;
             }
 
             // Start the game loop and enable barrel spawning
-            console.log('Starting game loop...');
             this.isRunning = true;
-            this.isPaused = false; // Garantir que não está pausado
-            this.clock.start(); // Garantir que o clock está rodando
+            this.isPaused = false;
+            this.clock.start();
             
             if (this.level) {
-                console.log('Starting barrel spawning...');
                 this.level.gameStarted = true;
                 this.level.startBarrels();
-            } else {
-                console.warn('startGameplay: Level is not defined, barrels will not spawn.');
             }
             
-            // Forçar uma renderização inicial para garantir visibilidade
             if (this.renderer && this.camera) {
-                console.log('Forcing initial render after starting gameplay...');
                 this.renderer.render(this.scene, this.camera);
-            } else {
-                console.error('startGameplay: Renderer or Camera is not defined for initial render!');
             }
-
-            console.log('Game successfully started!');
         } catch (error) {
             console.error('Error starting gameplay:', error);
-            // Adicionar mais detalhes ao erro se possível
             if (error.stack) {
                 console.error(error.stack);
             }
