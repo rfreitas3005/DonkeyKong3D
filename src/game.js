@@ -78,7 +78,7 @@ export class Game {
             this.camera.position.set(0, 5, 10);
             this.camera.lookAt(0, 0, 0);
 
-            // Renderer setup
+            // Renderer setup with improved shadow settings
             this.renderer = new THREE.WebGLRenderer({ 
                 antialias: true,
                 powerPreference: "high-performance"
@@ -86,6 +86,9 @@ export class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.shadowMap.enabled = true;
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.outputEncoding = THREE.sRGBEncoding;
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.5;
             
             // Garantir que o canvas está visível
             this.renderer.domElement.style.display = 'block';
@@ -96,25 +99,62 @@ export class Game {
             
             document.body.appendChild(this.renderer.domElement);
 
-            // Lighting setup
+            // Enhanced lighting setup
             console.log('Setting up lights...');
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            
+            // Ambient light com intensidade aumentada significativamente
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             this.scene.add(ambientLight);
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-            directionalLight.position.set(50, 200, 100);
-            directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 1024;
-            directionalLight.shadow.mapSize.height = 1024;
-            this.scene.add(directionalLight);
+            // Sol direcional mais próximo e mais intenso
+            const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+            sunLight.position.set(-40, 40, 100); // Reposicionado para ser mais visível
+            sunLight.target.position.set(0, 0, 100);
+            sunLight.castShadow = true;
+            
+            // Configurações de sombra mais suaves
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 500;
+            sunLight.shadow.camera.left = -50;
+            sunLight.shadow.camera.right = 50;
+            sunLight.shadow.camera.top = 50;
+            sunLight.shadow.camera.bottom = -50;
+            sunLight.shadow.bias = -0.0001;
+            sunLight.shadow.radius = 2;
+            
+            this.scene.add(sunLight);
+            this.scene.add(sunLight.target);
 
-            const pointLight1 = new THREE.PointLight(0xffffff, 0.5);
-            pointLight1.position.set(0, 50, 0);
-            this.scene.add(pointLight1);
+            // Sol visual maior e mais brilhante
+            const sunGeometry = new THREE.SphereGeometry(15, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00,
+                transparent: true,
+                opacity: 1.0
+            });
+            const sunSphere = new THREE.Mesh(sunGeometry, sunMaterial);
+            sunSphere.position.copy(sunLight.position);
+            this.scene.add(sunSphere);
 
-            const pointLight2 = new THREE.PointLight(0xffffff, 0.3);
-            pointLight2.position.set(0, 50, 200);
-            this.scene.add(pointLight2);
+            // Luz de preenchimento mais forte
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            fillLight.position.set(40, 40, 100);
+            this.scene.add(fillLight);
+
+            // Luz adicional para garantir visibilidade
+            const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            backLight.position.set(0, 40, -100);
+            this.scene.add(backLight);
+
+            // Configurações do renderer para mais brilho
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.outputEncoding = THREE.sRGBEncoding;
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 2.0; // Aumentado significativamente
+            this.renderer.physicallyCorrectLights = true;
 
             // Stats (if in debug mode)
             if (window.location.hash === '#debug') {

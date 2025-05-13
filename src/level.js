@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 export class Level {
     constructor(scene) {
@@ -7,6 +9,8 @@ export class Level {
         // Estas propriedades serão inicializadas pelo Game posteriormente
         this.game = null;
         this.player = null;
+        this.donkeyKongModel = null;
+        this.modelLoader = new GLTFLoader();
         
         // Inicializações de propriedades
         this.floors = [];
@@ -58,16 +62,18 @@ export class Level {
         // Cor de fundo totalmente preta como no arcade original
         this.scene.background = new THREE.Color(0x000000);
         
-        // Create ground
+        // Create ground with shadows
         const groundGeometry = new THREE.PlaneGeometry(400, this.floorLength * 2);
         const groundMaterial = new THREE.MeshPhongMaterial({
             color: 0x000000, // Fundo preto
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            shadowSide: THREE.FrontSide
         });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.position.y = 0;
         ground.position.z = this.floorLength / 2;
+        ground.receiveShadow = true;
         this.scene.add(ground);
     }
 
@@ -131,42 +137,42 @@ export class Level {
 
     createFloors() {
         // Cor do piso mais próxima do Donkey Kong original
-        const floorPinkColor = 0xE80053; // Rosa/vermelho mais próximo do original
-        
+        const floorMaterial = new THREE.MeshPhongMaterial({
+            color: 0xBC0045, // Vermelho escuro
+            metalness: 0.2,
+            roughness: 0.8,
+            shadowSide: THREE.FrontSide
+        });
+
         for (let floor = 0; floor < this.numFloors; floor++) {
             // Criar plataforma principal mais alta
             const floorGeometry = new THREE.BoxGeometry(this.boundaryWidth, 2, this.floorLength);
-            
-            // Material para o piso com cor rosa/vermelho do Donkey Kong original
-            const floorMaterial = new THREE.MeshPhongMaterial({ 
-                color: floorPinkColor,
-                metalness: 0.1,
-                roughness: 0.8,
-                shininess: 30
-            });
-            
             const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
             
-            // Posição ajustada para evitar que o personagem flutue
             floorMesh.position.set(
                 0,
                 floor * this.floorHeight,
                 this.floorLength / 2
             );
             
+            // Configurar sombras para o piso com melhor qualidade
+            floorMesh.castShadow = true;
+            floorMesh.receiveShadow = true;
+            
             this.floors.push(floorMesh);
             this.scene.add(floorMesh);
 
-            // Alternância de direção para cada andar (como no jogo original)
-            const isRightToLeft = floor % 2 === 1;
-            
-            // Adicionar linhas horizontais no estilo Donkey Kong original
-            // (mais espaçadas para o visual "girder")
+            // Determinar direção do movimento dos barris neste andar
+            const isRightToLeft = floor % 2 === 0;
+
+            // Adicionar vigas transversais para dar profundidade visual
             const numBeams = Math.floor(this.floorLength / 7);
+            
             for (let i = 0; i < numBeams; i++) {
                 const beamGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.3, 0.7);
                 const beamMaterial = new THREE.MeshPhongMaterial({ 
                     color: 0xBC0045, // Vermelho mais escuro para as linhas
+                    shadowSide: THREE.FrontSide
                 });
                 const beam = new THREE.Mesh(beamGeometry, beamMaterial);
                 
@@ -175,6 +181,10 @@ export class Level {
                     floor * this.floorHeight + 1.1, // Acima do piso
                     i * 7 + 3.5 // Distribuição uniforme ao longo do comprimento
                 );
+                
+                // Configurar sombras para as vigas com melhor qualidade
+                beam.castShadow = true;
+                beam.receiveShadow = true;
                 
                 this.scene.add(beam);
             }
@@ -194,6 +204,11 @@ export class Level {
                 floor * this.floorHeight - 0.7,
                 this.floorLength / 2
             );
+            
+            // Configurar sombras para os detalhes
+            lowerDetail.castShadow = true;
+            lowerDetail.receiveShadow = true;
+            
             this.scene.add(lowerDetail);
             
             // Adicionar setas direcionais no chão para indicar o fluxo (como no jogo original)
@@ -377,8 +392,124 @@ export class Level {
         });
     }
 
-    createDonkeyKong() {
-        // Create elevated platform for Donkey Kong with collision
+    async loadDonkeyKongModel() {
+        try {
+            console.log('Carregando modelo do Donkey Kong...');
+            const gltf = await this.modelLoader.loadAsync('./models/donkeykong.glb');
+            
+            this.donkeyKongModel = gltf.scene;
+            
+            // Reduzir significativamente a escala
+            this.donkeyKongModel.scale.set(0.4, 0.4, 0.4);
+            
+            // Configurar sombras e materiais para todos os meshes do modelo
+            this.donkeyKongModel.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    
+                    if (child.material) {
+                        child.material.needsUpdate = true;
+                        child.material.shadowSide = THREE.FrontSide;
+                    }
+                }
+                // Guardar referências aos ossos importantes se existirem
+                if (child.isBone) {
+                    console.log('Found bone:', child.name);
+                }
+            });
+
+            // Posicionar o DK no topo do nível
+            const topFloorY = (this.numFloors - 1) * this.floorHeight;
+            this.donkeyKongModel.position.set(
+                0,                           // Centro X
+                topFloorY + 2,              // Altura ajustada
+                this.floorLength * 0.85     // Posição Z mantida
+            );
+            
+            // Rotação básica
+            this.donkeyKongModel.rotation.set(0, Math.PI, 0);
+
+            // Criar o mixer de animação
+            this.dkMixer = new THREE.AnimationMixer(this.donkeyKongModel);
+
+            // Carregar a animação idle usando FBXLoader
+            try {
+                console.log('Carregando animação idle do Donkey Kong...');
+                const fbxLoader = new FBXLoader();
+                const idleAnim = await fbxLoader.loadAsync('./models/donkeyidle.fbx');
+                
+                if (idleAnim.animations && idleAnim.animations.length > 0) {
+                    console.log('Animação idle carregada, número de animações:', idleAnim.animations.length);
+                    
+                    // Tentar aplicar cada animação encontrada
+                    idleAnim.animations.forEach((animation, index) => {
+                        console.log(`Tentando aplicar animação ${index}:`, animation.name);
+                        try {
+                            const action = this.dkMixer.clipAction(animation);
+                            action.setEffectiveTimeScale(1.0);
+                            action.setEffectiveWeight(1.0);
+                            action.clampWhenFinished = true;
+                            action.play();
+                            
+                            if (!this.dkAnimations) this.dkAnimations = {};
+                            this.dkAnimations[animation.name || 'idle_' + index] = action;
+                            
+                            console.log(`Animação ${index} aplicada com sucesso`);
+                        } catch (e) {
+                            console.error(`Erro ao aplicar animação ${index}:`, e);
+                        }
+                    });
+                } else {
+                    console.warn('Arquivo de animação não contém animações');
+                }
+
+                // Limpar memória
+                idleAnim.traverse(child => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else if (child.material) {
+                            child.material.dispose();
+                        }
+                    }
+                });
+            } catch (animError) {
+                console.error('Erro ao carregar animação idle:', animError);
+            }
+
+            this.scene.add(this.donkeyKongModel);
+            console.log('Modelo do Donkey Kong carregado com sucesso');
+
+            // Atualizar a referência principal do DK
+            this.donkeyKong = this.donkeyKongModel;
+
+        } catch (error) {
+            console.error('Erro ao carregar o modelo do Donkey Kong:', error);
+            this.createPlaceholderDK();
+        }
+    }
+
+    createPlaceholderDK() {
+        // Criar um placeholder simples caso o modelo falhe ao carregar
+        const geometry = new THREE.BoxGeometry(2, 3, 1);
+        const material = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+        const placeholder = new THREE.Mesh(geometry, material);
+        
+        const topFloorY = (this.numFloors - 1) * this.floorHeight;
+        placeholder.position.set(
+            0,
+            topFloorY + 4.5,
+            this.floorLength * 0.85
+        );
+        
+        this.donkeyKongModel = placeholder;
+        this.scene.add(placeholder);
+    }
+
+    async createDonkeyKong() {
+        // Criar a plataforma para o DK
         const platformGeometry = new THREE.BoxGeometry(14, 1.5, 12);
         const platformMaterial = new THREE.MeshPhongMaterial({
             color: 0x8B4513,
@@ -395,204 +526,13 @@ export class Level {
             this.floorLength * 0.85
         );
         
-        // Add collision properties
+        this.donkeyKongPlatform.receiveShadow = true;
+        this.donkeyKongPlatform.castShadow = true;
         this.donkeyKongPlatform.userData.isBoundary = true;
         this.scene.add(this.donkeyKongPlatform);
 
-        // Criar um Donkey Kong mais parecido com a referência
-        const body = new THREE.Group();
-        
-        // Cores mais precisas baseadas na imagem de referência
-        const dkBrownColor = 0x8B5A2B; // Marrom principal do corpo
-        const dkLightBrownColor = 0xD2B48C; // Cor clara para o focinho
-        const dkRedColor = 0xFF0000; // Vermelho da gravata
-        const dkYellowColor = 0xFFD700; // Amarelo do logo "DK"
-        
-        // Torso com formato mais arredondado
-        const torsoGeometry = new THREE.SphereGeometry(3, 24, 18);
-        torsoGeometry.scale(1.3, 1, 0.9); // Mais largo e menos profundo
-        const torsoMaterial = new THREE.MeshPhongMaterial({ 
-            color: dkBrownColor,
-            shininess: 5
-        });
-        const torso = new THREE.Mesh(torsoGeometry, torsoMaterial);
-        torso.position.y = 0;
-        torso.position.z = 0;
-        torso.name = 'body';
-        body.add(torso);
-        
-        // Cabeça grande
-        const headGeometry = new THREE.SphereGeometry(2.8, 24, 20);
-        headGeometry.scale(1.2, 0.9, 0.8); // Ajustando proporções
-        const headMaterial = new THREE.MeshPhongMaterial({ 
-            color: dkBrownColor,
-            shininess: 5
-        });
-        const head = new THREE.Mesh(headGeometry, headMaterial);
-        head.position.y = 4.5;
-        head.position.z = 0.5;
-        head.name = 'head';
-        body.add(head);
-        
-        // Focinho grande e mais protuberante
-        const snoutGeometry = new THREE.SphereGeometry(2.5, 20, 16);
-        snoutGeometry.scale(1, 0.7, 0.6);
-        const snoutMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
-        const snout = new THREE.Mesh(snoutGeometry, snoutMaterial);
-        snout.position.set(0, 4, 2);
-        body.add(snout);
-        
-        // Boca
-        const mouthGeometry = new THREE.SphereGeometry(1.8, 20, 10);
-        mouthGeometry.scale(1, 0.4, 0.1);
-        const mouthMaterial = new THREE.MeshPhongMaterial({ 
-            color: 0x000000,
-            shininess: 10
-        });
-        const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
-        mouth.position.set(0, 3, 3);
-        body.add(mouth);
-        
-        // Olhos grandes e mais expressivos
-        for (let side = -1; side <= 1; side += 2) {
-            if (side === 0) continue;
-            
-            // Branco do olho
-            const eyeGeometry = new THREE.SphereGeometry(0.8, 20, 20);
-            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
-            const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            eye.position.set(side * 1.5, 5, 2);
-            body.add(eye);
-            
-            // Pupila
-            const pupilGeometry = new THREE.SphereGeometry(0.4, 12, 12);
-            const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-            const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-            pupil.position.set(side * 1.5, 5, 2.5);
-            body.add(pupil);
-            
-            // Sobrancelha
-            const browGeometry = new THREE.BoxGeometry(1, 0.3, 0.2);
-            const browMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const brow = new THREE.Mesh(browGeometry, browMaterial);
-            brow.position.set(side * 1.5, 5.7, 2.2);
-            brow.rotation.x = Math.PI * 0.1;
-            body.add(brow);
-            
-            // Orelha
-            const earGeometry = new THREE.SphereGeometry(0.8, 16, 16);
-            earGeometry.scale(0.5, 1, 0.3);
-            const earMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const ear = new THREE.Mesh(earGeometry, earMaterial);
-            ear.position.set(side * 2.2, 6, 0);
-            body.add(ear);
-        }
-        
-        // Gravata vermelha com logo DK
-        const tieGeometry = new THREE.BoxGeometry(1.2, 3.5, 0.3);
-        const tieMaterial = new THREE.MeshPhongMaterial({
-            color: dkRedColor,
-            shininess: 30
-        });
-        const tie = new THREE.Mesh(tieGeometry, tieMaterial);
-        tie.position.set(0, 1.5, 2.9);
-        tie.rotation.x = Math.PI * 0.15;
-        body.add(tie);
-        
-        // Logo DK na gravata
-        const logoGeometry = new THREE.BoxGeometry(0.9, 1, 0.35);
-        const logoMaterial = new THREE.MeshPhongMaterial({
-            color: dkYellowColor,
-            shininess: 50
-        });
-        const logo = new THREE.Mesh(logoGeometry, logoMaterial);
-        logo.position.set(0, 0.5, 3.1);
-        logo.rotation.x = Math.PI * 0.15;
-        body.add(logo);
-        
-        // Braços mais pesados
-        for (let side = -1; side <= 1; side += 2) {
-            if (side === 0) continue;
-            
-            // Grupo para o braço inteiro para poder animar
-            const armGroup = new THREE.Group();
-            armGroup.name = side === -1 ? 'leftArm' : 'rightArm';
-            
-            // Ombro
-            const shoulderGeometry = new THREE.SphereGeometry(1.5, 16, 16);
-            const shoulderMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const shoulder = new THREE.Mesh(shoulderGeometry, shoulderMaterial);
-            armGroup.add(shoulder);
-            
-            // Braço
-            const armGeometry = new THREE.CylinderGeometry(1.2, 1.4, 4, 12);
-            const armMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const arm = new THREE.Mesh(armGeometry, armMaterial);
-            arm.position.y = -2.5;
-            arm.rotation.z = side * 0.2;
-            armGroup.add(arm);
-            
-            // Mão grande
-            const handGeometry = new THREE.SphereGeometry(1.8, 16, 16);
-            handGeometry.scale(1.2, 0.8, 0.8);
-            const handMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
-            const hand = new THREE.Mesh(handGeometry, handMaterial);
-            hand.position.set(side * 0.8, -5, 0);
-            armGroup.add(hand);
-            
-            // Posicionar o grupo do braço
-            armGroup.position.set(side * 3.5, 2, 0);
-            body.add(armGroup);
-        }
-        
-        // Pernas curtas e fortes
-        for (let side = -1; side <= 1; side += 2) {
-            if (side === 0) continue;
-            
-            // Grupo para a perna inteira
-            const legGroup = new THREE.Group();
-            legGroup.name = side === -1 ? 'leftLeg' : 'rightLeg';
-            
-            // Coxa
-            const thighGeometry = new THREE.CylinderGeometry(1.2, 1.1, 2.5, 12);
-            const thighMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const thigh = new THREE.Mesh(thighGeometry, thighMaterial);
-            thigh.position.y = -1;
-            legGroup.add(thigh);
-            
-            // Pé
-            const footGeometry = new THREE.BoxGeometry(2, 1, 3);
-            const footMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
-            const foot = new THREE.Mesh(footGeometry, footMaterial);
-            foot.position.set(0, -2.5, 0.8);
-            legGroup.add(foot);
-            
-            // Posicionar o grupo da perna
-            legGroup.position.set(side * 2, -2.5, 0);
-            body.add(legGroup);
-        }
-        
-        // Posicionar o Donkey Kong completo
-        body.position.set(
-            0,
-            topFloorY + 4.5,
-            this.floorLength * 0.85
-        );
-        
-        // Virar para frente
-        body.rotation.y = Math.PI;
-
-        this.donkeyKong = body;
-        this.scene.add(this.donkeyKong);
-
-        // Initialize throwing state
-        this.isThrowingBarrel = false;
-        this.throwAnimationTime = 0;
-
-        // Adicionar temporizador para arremessar barris
-        this.barrelThrowInterval = 5; // segundos entre arremessos
-        this.nextBarrelThrowTime = 0; // Inicializado com 0, será atualizado no primeiro update
-        this.barrels = []; // array para armazenar os barris
+        // Carregar o modelo do DK
+        await this.loadDonkeyKongModel();
     }
 
     createPlatform(x, y, z, width, height, depth, color = 0x808080) {
@@ -638,6 +578,11 @@ export class Level {
         ladder.position.set(x, y, z);
         ladder.userData.isLadder = true;
         ladder.userData.floorIndex = floorIndex;
+        
+        // Configurar sombras para as escadas
+        ladder.castShadow = true;
+        ladder.receiveShadow = true;
+        
         this.scene.add(ladder);
         return ladder;
     }
@@ -741,8 +686,11 @@ export class Level {
         });
         const girder = new THREE.Mesh(geometry, material);
         girder.position.set(x, y, z);
+        
+        // Configurar sombras para as vigas
         girder.castShadow = true;
         girder.receiveShadow = true;
+        
         this.scene.add(girder);
         return girder;
     }
@@ -754,6 +702,11 @@ export class Level {
 
     update(deltaTime) {
         if (!deltaTime) return;
+
+        // Atualizar o mixer de animações do DK
+        if (this.dkMixer) {
+            this.dkMixer.update(deltaTime);
+        }
 
         // Only spawn and update barrels if game has started
         if (this.gameStarted) {

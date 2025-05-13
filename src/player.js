@@ -5,6 +5,8 @@ export class Player {
     constructor(scene, camera) {
         this.scene = scene;
         this.camera = camera;
+        this.orthographicCamera = null; // Nova câmera ortográfica
+        this.currentCamera = 'perspective'; // Controle da câmera atual
         this.mesh = null;
         this.tempMesh = null;
         this.mixer = null;
@@ -17,10 +19,10 @@ export class Player {
         this.jumpCooldown = 1.0; // 1 second cooldown
         
         // Reduced movement speeds
-        this.moveSpeed = 0.04;
-        this.climbSpeed = 0.025;
-        this.jumpForce = 0.15;
-        this.gravity = 0.004;
+        this.moveSpeed = 0.075;
+        this.climbSpeed = 0.04;
+        this.jumpForce = 0.35;
+        this.gravity = 0.020;
         
         this.velocity = new THREE.Vector3();
         this.currentFloor = 0;
@@ -58,6 +60,18 @@ export class Player {
         // Create collision box
         this.collider = new THREE.Box3();
 
+        // Initialize orthographic camera
+        const aspect = window.innerWidth / window.innerHeight;
+        this.orthographicCamera = new THREE.OrthographicCamera(
+            -15 * aspect, 15 * aspect,  // Reduzido para melhor visão 2D
+            15, -15,                    // Reduzido para melhor visão 2D
+            0.1, 1000
+        );
+        // Posicionar a câmera para uma visão lateral 2D
+        this.orthographicCamera.position.set(30, 0, 0);
+        this.orthographicCamera.zoom = 1.2;
+        this.orthographicCamera.updateProjectionMatrix();
+
         // Load the actual character model
         await this.loadCharacterModel();
     }
@@ -77,30 +91,38 @@ export class Player {
             model.position.copy(this.tempMesh.position);
             model.rotation.copy(this.tempMesh.rotation);
             
-            // Garantir que o modelo é visível
+            // Garantir que o modelo é visível e configurar sombras
             model.visible = true;
+            model.castShadow = true;
+            model.receiveShadow = true;
+            
+            // Configurar sombras para todas as partes do modelo
             model.traverse(child => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
-                    child.visible = true;
                     
-                    // Garantir que os materiais estão configurados corretamente
+                    // Melhorar materiais para sombras mais realistas
                     if (child.material) {
                         if (Array.isArray(child.material)) {
                             child.material.forEach(m => {
+                                m.shadowSide = THREE.FrontSide;
                                 m.needsUpdate = true;
-                                m.transparent = false;
-                                m.opacity = 1.0;
                             });
                         } else {
+                            child.material.shadowSide = THREE.FrontSide;
                             child.material.needsUpdate = true;
-                            child.material.transparent = false;
-                            child.material.opacity = 1.0;
                         }
                     }
                 }
             });
+
+            // Criar um helper de sombra para debug (opcional)
+            if (this.scene.parent && this.scene.parent.renderer) {
+                const helper = new THREE.CameraHelper(this.scene.parent.sunLight?.shadow.camera);
+                helper.visible = false; // Deixar invisível por padrão
+                this.scene.add(helper);
+            }
             
             // Clean up temporary mesh
             if (this.tempMesh && this.tempMesh.parent) {
@@ -211,7 +233,8 @@ export class Player {
             right: false,
             up: false,
             down: false,
-            jump: false
+            jump: false,
+            switchCamera: false // Nova tecla para alternar câmera
         };
 
         // Remover handlers antigos se existirem
@@ -289,6 +312,30 @@ export class Player {
         
         // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
         switch (event.code) {
+            case 'KeyG':
+                // Teletransportar para o último andar (onde está o DK)
+                if (this.mesh) {
+                    // Calcular a altura do último andar
+                    const lastFloorY = (3) * this.floorHeight; // 3 é o índice do último andar (total de 4 andares, 0-3)
+                    
+                    // Posicionar o jogador
+                    this.mesh.position.y = lastFloorY + 1; // +1 para ficar em cima do chão
+                    this.mesh.position.z = this.floorLength * 0.85; // Mesma posição Z do DK
+                    this.mesh.position.x = 0; // Centralizar na plataforma
+                    
+                    // Resetar física
+                    this.velocity.y = 0;
+                    this.isJumping = false;
+                    this.currentFloor = 3; // Atualizar o andar atual
+                    
+                    console.log('Teleported to Donkey Kong floor');
+                }
+                break;
+            case 'KeyV':
+                // Alternar entre câmeras
+                this.currentCamera = this.currentCamera === 'perspective' ? 'orthographic' : 'perspective';
+                console.log('Switched to', this.currentCamera, 'camera');
+                break;
             case 'KeyA':
             case 'ArrowLeft':
                 console.log('LEFT key pressed');
@@ -496,6 +543,12 @@ export class Player {
             return;
         }
 
+        // Atualizar a câmera ativa na cena
+        if (this.scene.parent) {
+            this.scene.parent.camera = this.currentCamera === 'perspective' ? 
+                this.camera : this.orthographicCamera;
+        }
+
         // Log se o Pointer Lock não estiver ativo mas não bloquear o movimento
         if (!this.isPointerLocked && this.enabled) {
             // Apenas logar uma vez por segundo para não sobrecarregar o console
@@ -506,7 +559,7 @@ export class Player {
 
         // Update animation mixer
         if (this.mixer) {
-            const animSpeed = this.isJumping ? 0.6 : 0.8;
+            const animSpeed = this.isJumping ? 1.2 : 1.0;
             this.mixer.update(deltaTime * animSpeed);
         }
 
@@ -576,38 +629,58 @@ export class Player {
     }
 
     updateCameraPosition() {
-        // Se o jogador ou a câmera não existem, não fazer nada
-        if (!this.mesh || !this.camera) {
-            console.warn('updateCameraPosition: Player mesh or camera not available.');
+        // Se o jogador não existe, não fazer nada
+        if (!this.mesh) {
+            console.warn('updateCameraPosition: Player mesh not available.');
             return;
         }
 
-        // Calculate camera rotation based on mouse input
-        const rotation = new THREE.Euler(
-            this.cameraRotation.x,
-            this.cameraRotation.y,
-            0,
-            'YXZ'
-        );
+        if (this.currentCamera === 'perspective') {
+            // Câmera em perspectiva (original)
+            const rotation = new THREE.Euler(
+                this.cameraRotation.x,
+                this.cameraRotation.y,
+                0,
+                'YXZ'
+            );
 
-        // Calculate camera position with adjusted offset
-        const offset = new THREE.Vector3(
-            0,
-            this.cameraOffset.y,
-            this.cameraOffset.z
-        );
-        offset.applyEuler(rotation);
-        
-        // Set camera position and rotation
-        const targetPosition = this.mesh.position.clone().add(offset);
-        this.camera.position.copy(targetPosition);
-        this.camera.rotation.copy(rotation);
+            const offset = new THREE.Vector3(
+                0,
+                this.cameraOffset.y,
+                this.cameraOffset.z
+            );
+            offset.applyEuler(rotation);
+            
+            const targetPosition = this.mesh.position.clone().add(offset);
+            this.camera.position.copy(targetPosition);
+            this.camera.rotation.copy(rotation);
+            this.camera.rotation.x -= 0.2;
+        } else {
+            // Câmera ortográfica (2D)
+            const playerPos = this.mesh.position;
+            
+            // Manter a câmera sempre à direita do jogador com uma distância fixa
+            this.orthographicCamera.position.set(
+                playerPos.x + 30, // Manter distância fixa no eixo X
+                playerPos.y,      // Seguir a altura do jogador
+                playerPos.z       // Seguir a posição Z do jogador
+            );
 
-        // Add a slightly stronger tilt to the camera to see the path ahead better
-        this.camera.rotation.x -= 0.2;
-        
-        // Log camera position for debugging
-        // console.log(`Camera Position: X=${this.camera.position.x.toFixed(2)}, Y=${this.camera.position.y.toFixed(2)}, Z=${this.camera.position.z.toFixed(2)}`);
+            // Fazer a câmera olhar para o jogador
+            this.orthographicCamera.lookAt(playerPos);
+
+            // Rotacionar a câmera para ter uma visão lateral perfeita
+            this.orthographicCamera.rotation.y = -Math.PI / 2;
+
+            // Ajustar a área visível baseada na posição do jogador
+            const aspect = window.innerWidth / window.innerHeight;
+            const viewWidth = 15;
+            this.orthographicCamera.left = -viewWidth * aspect;
+            this.orthographicCamera.right = viewWidth * aspect;
+            this.orthographicCamera.top = viewWidth;
+            this.orthographicCamera.bottom = -viewWidth;
+            this.orthographicCamera.updateProjectionMatrix();
+        }
     }
 
     checkCollisions() {
@@ -801,15 +874,15 @@ export class Player {
 
     applyGravity() {
         if (this.isJumping) {
-            // Slower gravity at the peak of the jump
-            const peakHeight = 0.1;
+            // Faster gravity during jump
+            const peakHeight = 0.05;
             if (Math.abs(this.velocity.y) < peakHeight) {
-                this.velocity.y -= this.gravity * 0.5;
+                this.velocity.y -= this.gravity * 0.7;
             } else {
-                this.velocity.y -= this.gravity;
+                this.velocity.y -= this.gravity * 1.2;
             }
         } else {
-            this.velocity.y -= this.gravity * 1.1;
+            this.velocity.y -= this.gravity * 1.3;
         }
         
         this.mesh.position.y += this.velocity.y;
