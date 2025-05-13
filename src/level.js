@@ -399,8 +399,8 @@ export class Level {
             
             this.donkeyKongModel = gltf.scene;
             
-            // Reduzir significativamente a escala
-            this.donkeyKongModel.scale.set(0.4, 0.4, 0.4);
+            // Making DK much larger now
+            this.donkeyKongModel.scale.set(1.2, 1.2, 1.2);
             
             // Configurar sombras e materiais para todos os meshes do modelo
             this.donkeyKongModel.traverse(child => {
@@ -423,7 +423,7 @@ export class Level {
             const topFloorY = (this.numFloors - 1) * this.floorHeight;
             this.donkeyKongModel.position.set(
                 0,                           // Centro X
-                topFloorY + 2,              // Altura ajustada
+                topFloorY + 4.8,              // Altura ajustada - moved much higher
                 this.floorLength * 0.85     // Posição Z mantida
             );
             
@@ -509,29 +509,7 @@ export class Level {
     }
 
     async createDonkeyKong() {
-        // Criar a plataforma para o DK
-        const platformGeometry = new THREE.BoxGeometry(14, 1.5, 12);
-        const platformMaterial = new THREE.MeshPhongMaterial({
-            color: 0x8B4513,
-            metalness: 0.2,
-            roughness: 0.8
-        });
-        this.donkeyKongPlatform = new THREE.Mesh(platformGeometry, platformMaterial);
-        
-        // Position platform above the top floor
-        const topFloorY = (this.numFloors - 1) * this.floorHeight;
-        this.donkeyKongPlatform.position.set(
-            0,
-            topFloorY + 0.75,
-            this.floorLength * 0.85
-        );
-        
-        this.donkeyKongPlatform.receiveShadow = true;
-        this.donkeyKongPlatform.castShadow = true;
-        this.donkeyKongPlatform.userData.isBoundary = true;
-        this.scene.add(this.donkeyKongPlatform);
-
-        // Carregar o modelo do DK
+        // Remove platform creation code and just load DK
         await this.loadDonkeyKongModel();
     }
 
@@ -587,8 +565,54 @@ export class Level {
         return ladder;
     }
 
-    createBarrel() {
-        // Barril mais parecido com o jogo original - cilindro redondo com aros
+    async createBarrel() {
+        try {
+            // Load the R2-D2 model for barrels
+            const gltf = await this.modelLoader.loadAsync('./models/r2-d2.glb');
+            const barrelModel = gltf.scene;
+            
+            // Scale the barrel model appropriately - making R2-D2 larger
+            barrelModel.scale.set(2.0, 2.0, 2.0);
+            
+            // Position barrel at the stairs on the top floor
+            const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
+            const spawnZ = this.floorLength * 0.15;
+            const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
+            barrelModel.position.set(spawnX, spawnY, spawnZ);
+
+            // Add properties for movement
+            barrelModel.userData.floor = this.numFloors - 1;
+            barrelModel.userData.speed = 70;
+            barrelModel.userData.rotationSpeed = 8;
+            barrelModel.userData.movingToBack = true;
+            barrelModel.userData.verticalSpeed = 0;
+            
+            // Ensure barrel renders in front of other objects
+            barrelModel.renderOrder = 2;
+            
+            // Configure shadows for all meshes in the model
+            barrelModel.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            // Initial rotation to lay barrel on its side
+            barrelModel.rotation.z = Math.PI / 2;
+
+            // Add to scene and tracking array
+            this.scene.add(barrelModel);
+            this.barrels.push(barrelModel);
+        } catch (error) {
+            console.error('Error loading barrel model:', error);
+            // Fallback to original barrel creation if model loading fails
+            this.createFallbackBarrel();
+        }
+    }
+
+    createFallbackBarrel() {
+        // Original barrel creation code as fallback
         const segments = 24;
         const radiusTop = 1.2;
         const radiusBottom = 1.2;
@@ -604,7 +628,6 @@ export class Level {
             false
         );
 
-        // Não deformar tanto o barril - manter mais cilíndrico
         const middleRadius = 1.4;  
         const positions = geometry.attributes.position.array;
         for (let i = 0; i < positions.length; i += 3) {
@@ -617,64 +640,33 @@ export class Level {
         }
         geometry.computeVertexNormals();
         
-        // Material de madeira
         const material = new THREE.MeshPhongMaterial({ 
-            color: 0xA05010,  // Marrom mais terroso para o barril
+            color: 0xA05010,
             specular: 0x222222,
             shininess: 15
         });
 
         const barrel = new THREE.Mesh(geometry, material);
 
-        // Position barrel at the stairs on the top floor
         const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
         const spawnZ = this.floorLength * 0.15;
         const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
         barrel.position.set(spawnX, spawnY, spawnZ);
 
-        // Add properties for movement
         barrel.userData.floor = this.numFloors - 1;
-        barrel.userData.speed = 70; // Velocidade mantida alta para gameplay
+        barrel.userData.speed = 70;
         barrel.userData.rotationSpeed = 8;
         barrel.userData.movingToBack = true;
         barrel.userData.verticalSpeed = 0;
         
-        // Ensure barrel renders in front of other objects
         barrel.renderOrder = 2;
         barrel.material.depthTest = true;
         barrel.material.transparent = false;
 
-        // Initial rotation to lay barrel on its side
         barrel.rotation.z = Math.PI / 2;
         
-        // Adicionar detalhes visuais ao barril
-        this.addBarrelDetails(barrel);
-
-        // Add to scene and tracking array
         this.scene.add(barrel);
         this.barrels.push(barrel);
-    }
-
-    // Novo método para adicionar detalhes visuais aos barris
-    addBarrelDetails(barrel) {
-        // Adicionar detalhes visuais ao barril - aros metálicos mais nítidos
-        const ringGeometry = new THREE.TorusGeometry(1.25, 0.1, 8, 24);
-        const ringMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x555555,
-            roughness: 0.3,
-            metalness: 0.8
-        });
-        
-        // Criar aros metálicos em posições espaçadas uniformemente
-        const positions = [-0.9, -0.3, 0.3, 0.9]; // Quatro aros ao longo do barril
-        positions.forEach(pos => {
-            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-            ring.position.set(0, pos, 0);
-            ring.rotation.x = Math.PI / 2; // Alinhar com o barril
-            barrel.add(ring);
-        });
-        
-        return barrel;
     }
 
     createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
