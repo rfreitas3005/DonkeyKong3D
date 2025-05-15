@@ -136,17 +136,31 @@ export class Level {
     }
 
     createFloors() {
-        // Cor do piso mais próxima do Donkey Kong original
+        // Materiais reutilizáveis
         const floorMaterial = new THREE.MeshPhongMaterial({
-            color: 0xBC0045, // Vermelho escuro
+            color: 0xBC0045,
             metalness: 0.2,
             roughness: 0.8,
             shadowSide: THREE.FrontSide
         });
 
+        const beamMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xBC0045,
+            shadowSide: THREE.FrontSide
+        });
+
+        const sideDetailMaterial = new THREE.MeshPhongMaterial({
+            color: 0xBC0045,
+            metalness: 0.1,
+            roughness: 0.8
+        });
+
+        // Geometrias reutilizáveis
+        const floorGeometry = new THREE.BoxGeometry(this.boundaryWidth, 2, this.floorLength);
+        const beamGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.3, 0.7);
+        const sideDetailGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.5, this.floorLength);
+
         for (let floor = 0; floor < this.numFloors; floor++) {
-            // Criar plataforma principal mais alta
-            const floorGeometry = new THREE.BoxGeometry(this.boundaryWidth, 2, this.floorLength);
             const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
             
             floorMesh.position.set(
@@ -155,68 +169,41 @@ export class Level {
                 this.floorLength / 2
             );
             
-            // Configurar sombras para o piso com melhor qualidade
             floorMesh.castShadow = true;
             floorMesh.receiveShadow = true;
             
             this.floors.push(floorMesh);
             this.scene.add(floorMesh);
 
-            // Determinar direção do movimento dos barris neste andar
             const isRightToLeft = floor % 2 === 0;
-
-            // Adicionar vigas transversais para dar profundidade visual
             const numBeams = Math.floor(this.floorLength / 7);
             
             for (let i = 0; i < numBeams; i++) {
-                const beamGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.3, 0.7);
-                const beamMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0xBC0045, // Vermelho mais escuro para as linhas
-                    shadowSide: THREE.FrontSide
-                });
                 const beam = new THREE.Mesh(beamGeometry, beamMaterial);
                 
                 beam.position.set(
                     0,
-                    floor * this.floorHeight + 1.1, // Acima do piso
-                    i * 7 + 3.5 // Distribuição uniforme ao longo do comprimento
+                    floor * this.floorHeight + 1.1,
+                    i * 7 + 3.5
                 );
                 
-                // Configurar sombras para as vigas com melhor qualidade
                 beam.castShadow = true;
                 beam.receiveShadow = true;
                 
                 this.scene.add(beam);
             }
             
-            // Adicionar detalhes laterais para cada piso
-            const sideDetailGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.5, this.floorLength);
-            const sideDetailMaterial = new THREE.MeshPhongMaterial({
-                color: 0xBC0045, // Vermelho mais escuro
-                metalness: 0.1,
-                roughness: 0.8
-            });
-            
-            // Detalhe inferior
-            const lowerDetail = new THREE.Mesh(sideDetailGeometry, sideDetailMaterial);
-            lowerDetail.position.set(
+            // Detalhes laterais
+            const sideDetail = new THREE.Mesh(sideDetailGeometry, sideDetailMaterial);
+            sideDetail.position.set(
                 0,
-                floor * this.floorHeight - 0.7,
+                floor * this.floorHeight - 0.75,
                 this.floorLength / 2
             );
-            
-            // Configurar sombras para os detalhes
-            lowerDetail.castShadow = true;
-            lowerDetail.receiveShadow = true;
-            
-            this.scene.add(lowerDetail);
-            
-            // Adicionar setas direcionais no chão para indicar o fluxo (como no jogo original)
-            this.addDirectionalMarkers(floor, isRightToLeft);
+            sideDetail.castShadow = true;
+            sideDetail.receiveShadow = true;
+            this.scene.add(sideDetail);
         }
-        
-        // Adicionar paredes laterais visíveis
-        this.createWalls();
     }
 
     // Novo método para adicionar indicadores de direção no chão
