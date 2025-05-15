@@ -433,52 +433,7 @@ export class Level {
             // Criar o mixer de animação
             this.dkMixer = new THREE.AnimationMixer(this.donkeyKongModel);
 
-            // Carregar a animação idle usando FBXLoader
-            try {
-                console.log('Carregando animação idle do Donkey Kong...');
-                const fbxLoader = new FBXLoader();
-                const idleAnim = await fbxLoader.loadAsync('./models/donkeyidle.fbx');
-                
-                if (idleAnim.animations && idleAnim.animations.length > 0) {
-                    console.log('Animação idle carregada, número de animações:', idleAnim.animations.length);
-                    
-                    // Tentar aplicar cada animação encontrada
-                    idleAnim.animations.forEach((animation, index) => {
-                        console.log(`Tentando aplicar animação ${index}:`, animation.name);
-                        try {
-                            const action = this.dkMixer.clipAction(animation);
-                            action.setEffectiveTimeScale(1.0);
-                            action.setEffectiveWeight(1.0);
-                            action.clampWhenFinished = true;
-                            action.play();
-                            
-                            if (!this.dkAnimations) this.dkAnimations = {};
-                            this.dkAnimations[animation.name || 'idle_' + index] = action;
-                            
-                            console.log(`Animação ${index} aplicada com sucesso`);
-                        } catch (e) {
-                            console.error(`Erro ao aplicar animação ${index}:`, e);
-                        }
-                    });
-                } else {
-                    console.warn('Arquivo de animação não contém animações');
-                }
-
-                // Limpar memória
-                idleAnim.traverse(child => {
-                    if (child.isMesh) {
-                        child.geometry.dispose();
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(m => m.dispose());
-                        } else if (child.material) {
-                            child.material.dispose();
-                        }
-                    }
-                });
-            } catch (animError) {
-                console.error('Erro ao carregar animação idle:', animError);
-            }
-
+            // Adicionar direto à cena sem tentar carregar a animação
             this.scene.add(this.donkeyKongModel);
             console.log('Modelo do Donkey Kong carregado com sucesso');
 
@@ -565,54 +520,8 @@ export class Level {
         return ladder;
     }
 
-    async createBarrel() {
-        try {
-            // Load the R2-D2 model for barrels
-            const gltf = await this.modelLoader.loadAsync('./models/r2-d2.glb');
-            const barrelModel = gltf.scene;
-            
-            // Scale the barrel model appropriately - making R2-D2 larger
-            barrelModel.scale.set(2.0, 2.0, 2.0);
-            
-            // Position barrel at the stairs on the top floor
-            const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
-            const spawnZ = this.floorLength * 0.15;
-            const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
-            barrelModel.position.set(spawnX, spawnY, spawnZ);
-
-            // Add properties for movement
-            barrelModel.userData.floor = this.numFloors - 1;
-            barrelModel.userData.speed = 70;
-            barrelModel.userData.rotationSpeed = 8;
-            barrelModel.userData.movingToBack = true;
-            barrelModel.userData.verticalSpeed = 0;
-            
-            // Ensure barrel renders in front of other objects
-            barrelModel.renderOrder = 2;
-            
-            // Configure shadows for all meshes in the model
-            barrelModel.traverse(child => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-
-            // Initial rotation to lay barrel on its side
-            barrelModel.rotation.z = Math.PI / 2;
-
-            // Add to scene and tracking array
-            this.scene.add(barrelModel);
-            this.barrels.push(barrelModel);
-        } catch (error) {
-            console.error('Error loading barrel model:', error);
-            // Fallback to original barrel creation if model loading fails
-            this.createFallbackBarrel();
-        }
-    }
-
-    createFallbackBarrel() {
-        // Original barrel creation code as fallback
+    createBarrel() {
+        // Barril mais parecido com o jogo original - cilindro redondo com aros
         const segments = 24;
         const radiusTop = 1.2;
         const radiusBottom = 1.2;
@@ -628,6 +537,7 @@ export class Level {
             false
         );
 
+        // Não deformar tanto o barril - manter mais cilíndrico
         const middleRadius = 1.4;  
         const positions = geometry.attributes.position.array;
         for (let i = 0; i < positions.length; i += 3) {
@@ -640,33 +550,64 @@ export class Level {
         }
         geometry.computeVertexNormals();
         
+        // Material de madeira
         const material = new THREE.MeshPhongMaterial({ 
-            color: 0xA05010,
+            color: 0xA05010,  // Marrom mais terroso para o barril
             specular: 0x222222,
             shininess: 15
         });
 
         const barrel = new THREE.Mesh(geometry, material);
 
+        // Position barrel at the stairs on the top floor
         const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
         const spawnZ = this.floorLength * 0.15;
         const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
         barrel.position.set(spawnX, spawnY, spawnZ);
 
+        // Add properties for movement
         barrel.userData.floor = this.numFloors - 1;
-        barrel.userData.speed = 70;
+        barrel.userData.speed = 70; // Velocidade mantida alta para gameplay
         barrel.userData.rotationSpeed = 8;
         barrel.userData.movingToBack = true;
         barrel.userData.verticalSpeed = 0;
         
+        // Ensure barrel renders in front of other objects
         barrel.renderOrder = 2;
         barrel.material.depthTest = true;
         barrel.material.transparent = false;
 
+        // Initial rotation to lay barrel on its side
         barrel.rotation.z = Math.PI / 2;
         
+        // Adicionar detalhes visuais ao barril
+        this.addBarrelDetails(barrel);
+
+        // Add to scene and tracking array
         this.scene.add(barrel);
         this.barrels.push(barrel);
+    }
+
+    // Novo método para adicionar detalhes visuais aos barris
+    addBarrelDetails(barrel) {
+        // Adicionar detalhes visuais ao barril - aros metálicos mais nítidos
+        const ringGeometry = new THREE.TorusGeometry(1.25, 0.1, 8, 24);
+        const ringMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x555555,
+            roughness: 0.3,
+            metalness: 0.8
+        });
+        
+        // Criar aros metálicos em posições espaçadas uniformemente
+        const positions = [-0.9, -0.3, 0.3, 0.9]; // Quatro aros ao longo do barril
+        positions.forEach(pos => {
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.set(0, pos, 0);
+            ring.rotation.x = Math.PI / 2; // Alinhar com o barril
+            barrel.add(ring);
+        });
+        
+        return barrel;
     }
 
     createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
