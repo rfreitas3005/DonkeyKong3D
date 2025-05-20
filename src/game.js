@@ -328,17 +328,6 @@ export class Game {
             this.scene.add(sunLight);
             this.scene.add(sunLight.target);
 
-            // Sol visual maior e mais brilhante
-            const sunGeometry = new THREE.SphereGeometry(15, 32, 32);
-            const sunMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0xffff00,
-                transparent: true,
-                opacity: 1.0
-            });
-            const sunSphere = new THREE.Mesh(sunGeometry, sunMaterial);
-            sunSphere.position.copy(sunLight.position);
-            this.scene.add(sunSphere);
-
             // Luz de preenchimento mais forte
             const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
             fillLight.position.set(40, 40, 100);

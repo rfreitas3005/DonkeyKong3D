@@ -56,6 +56,7 @@ export class Level {
         this.createStairs();
         this.createBoundaries();
         this.createDonkeyKong();
+        this.createSun();
     }
 
     createEnvironment() {
@@ -1113,5 +1114,124 @@ export class Level {
                 this.barrels.splice(i, 1);
             }
         }
+    }
+
+    createSun() {
+        // Criar o objeto pai do sol
+        const sunParent = new THREE.Object3D();
+        sunParent.position.set(-100, 150, -50);
+
+        // Criar o disco principal do sol (mais vibrante)
+        const sunGeometry = new THREE.CircleGeometry(15, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({
+            color: 0xFFD700, // Dourado mais vibrante
+            side: THREE.DoubleSide
+        });
+        const sunCore = new THREE.Mesh(sunGeometry, sunMaterial);
+        sunParent.add(sunCore);
+
+        // Adicionar brilho mais intenso ao redor do disco
+        const glowGeometry = new THREE.CircleGeometry(20, 32);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xFFA500, // Laranja para contraste
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.z = -0.2;
+        sunParent.add(glow);
+
+        // Criar raios principais mais longos e contrastantes
+        const numMainRays = 12; // Menos raios para mais destaque
+        const rayGeometry = new THREE.BufferGeometry();
+        const rayVertices = [];
+        
+        for (let i = 0; i < numMainRays; i++) {
+            const angle = (i / numMainRays) * Math.PI * 2;
+            const innerRadius = 15;
+            // Raios mais longos para maior visibilidade
+            const outerRadius = i % 2 === 0 ? 35 : 25;
+            
+            rayVertices.push(
+                Math.cos(angle) * innerRadius,
+                Math.sin(angle) * innerRadius,
+                0,
+                Math.cos(angle) * outerRadius,
+                Math.sin(angle) * outerRadius,
+                0
+            );
+        }
+        
+        rayGeometry.setAttribute('position', new THREE.Float32BufferAttribute(rayVertices, 3));
+        const rayMaterial = new THREE.LineBasicMaterial({
+            color: 0xFFD700,
+            linewidth: 3 // Linha mais grossa
+        });
+        const rays = new THREE.LineSegments(rayGeometry, rayMaterial);
+        sunParent.add(rays);
+
+        // Adicionar raios secundários mais visíveis
+        const numSecondaryRays = 12;
+        const secondaryRayGeometry = new THREE.BufferGeometry();
+        const secondaryRayVertices = [];
+        
+        for (let i = 0; i < numSecondaryRays; i++) {
+            const angle = ((i / numSecondaryRays) * Math.PI * 2) + (Math.PI / numSecondaryRays);
+            const innerRadius = 15;
+            const outerRadius = 30;
+            
+            secondaryRayVertices.push(
+                Math.cos(angle) * innerRadius,
+                Math.sin(angle) * innerRadius,
+                0,
+                Math.cos(angle) * outerRadius,
+                Math.sin(angle) * outerRadius,
+                0
+            );
+        }
+        
+        secondaryRayGeometry.setAttribute('position', new THREE.Float32BufferAttribute(secondaryRayVertices, 3));
+        const secondaryRayMaterial = new THREE.LineBasicMaterial({
+            color: 0xFFA500, // Laranja para contraste
+            transparent: true,
+            opacity: 0.7,
+            linewidth: 2
+        });
+        const secondaryRays = new THREE.LineSegments(secondaryRayGeometry, secondaryRayMaterial);
+        sunParent.add(secondaryRays);
+
+        // Adicionar luz do sol mais intensa
+        const sunLight = new THREE.PointLight(0xffffcc, 2, 500);
+        sunLight.position.set(0, 0, 0);
+        sunParent.add(sunLight);
+
+        // Animação mais rápida e notável
+        let time = 0;
+        const animate = () => {
+            time += 0.016; // Aproximadamente 60 FPS
+
+            // Rotação mais rápida dos raios em direções opostas
+            rays.rotation.z += 0.001;
+            secondaryRays.rotation.z -= 0.0015;
+            
+            // Pulsar mais pronunciado do brilho
+            const glowScale = 1 + Math.sin(time * 2) * 0.2; // Aumentado amplitude
+            glow.scale.set(glowScale, glowScale, 1);
+            
+            // Pulsar suave do núcleo
+            const coreScale = 1 + Math.sin(time * 3) * 0.1;
+            sunCore.scale.set(coreScale, coreScale, 1);
+            
+            // Variar a opacidade do brilho
+            glowMaterial.opacity = 0.4 + Math.sin(time * 1.5) * 0.2;
+            
+            requestAnimationFrame(animate);
+        };
+        animate();
+
+        // Adicionar o sol à cena
+        this.scene.add(sunParent);
+        this.sun = sunParent;
     }
 } 
