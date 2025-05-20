@@ -22,7 +22,7 @@ export class Level {
         this.minSpawnInterval = 800; // Intervalo mínimo entre barris
         this.maxSpawnInterval = 1500; // Intervalo máximo entre barris
         this.laneWidth = 6;
-        this.floorHeight = 16;
+        this.floorHeight = 50; // Aumentado de 16 para 50
         this.numFloors = 4;
         this.floorLength = 200;
         this.boundaryWidth = 40;

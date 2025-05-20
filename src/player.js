@@ -5,39 +5,38 @@ export class Player {
     constructor(scene, camera) {
         this.scene = scene;
         this.camera = camera;
-        this.orthographicCamera = null; // Nova câmera ortográfica
-        this.currentCamera = 'perspective'; // Controle da câmera atual
+        this.orthographicCamera = null;
+        this.currentCamera = 'perspective';
         this.mesh = null;
         this.tempMesh = null;
         this.mixer = null;
         this.animations = {};
         this.currentAnimation = null;
         this.idleTimer = 0;
-        this.idleDelay = 10; // 10 seconds delay before main idle animation
+        this.idleDelay = 10;
         this.isJumping = false;
-        this.lastJumpTime = 0; // Track last jump time
-        this.jumpCooldown = 1.0; // 1 second cooldown
-        this.controlsEnabled = true; // Add controlsEnabled property
+        this.lastJumpTime = 0;
+        this.jumpCooldown = 1.0;
+        this.controlsEnabled = true;
         
-        // Reduced movement speeds
+        // Camera settings
         this.moveSpeed = 0.075;
         this.turnSpeed = 2.0;
-        this.jumpForce = 0.35; // Reduzido de 0.45 para 0.35
-        this.gravity = 0.018; // Aumentado de 0.015 para 0.018
+        this.jumpForce = 0.35;
+        this.gravity = 0.018;
         this.verticalSpeed = 0;
         this.climbSpeed = 0.04;
         
         this.velocity = new THREE.Vector3();
         this.currentFloor = 0;
-        this.floorHeight = 16;
+        this.floorHeight = 50; // Aumentado de 16 para 50
         this.onLadder = false;
         this.movementDirection = new THREE.Vector3();
         this.isLoaded = false;
         this.floorLength = 200;
         this.laneWidth = 6;
-        this.enabled = false; // Adicionar propriedade enabled
+        this.enabled = false;
 
-        // Camera control variables - restaurada configuração original
         this.cameraOffset = new THREE.Vector3(0, 3, 6);
         this.cameraRotation = new THREE.Euler(0, 0, 0);
         this.mouseSensitivity = 0.002;
@@ -62,18 +61,6 @@ export class Player {
 
         // Create collision box
         this.collider = new THREE.Box3();
-
-        // Initialize orthographic camera
-        const aspect = window.innerWidth / window.innerHeight;
-        this.orthographicCamera = new THREE.OrthographicCamera(
-            -15 * aspect, 15 * aspect,  // Reduzido para melhor visão 2D
-            15, -15,                    // Reduzido para melhor visão 2D
-            0.1, 1000
-        );
-        // Posicionar a câmera para uma visão lateral 2D
-        this.orthographicCamera.position.set(30, 0, 0);
-        this.orthographicCamera.zoom = 1.2;
-        this.orthographicCamera.updateProjectionMatrix();
 
         // Load the actual character model
         await this.loadCharacterModel();
@@ -367,7 +354,7 @@ export class Player {
             up: false,
             down: false,
             jump: false,
-            switchCamera: false // Nova tecla para alternar câmera
+            switchCamera: false
         };
 
         // Remover handlers antigos se existirem
@@ -441,15 +428,50 @@ export class Player {
     }
 
     onKeyDown(event) {
-        // Only process key events if controls are enabled
         if (!this.controlsEnabled) {
             return;
         }
 
-        console.log('Key pressed:', event.key, event.code);
-        
-        // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
         switch (event.code) {
+            case 'KeyL':
+                console.log('L key pressed - changing camera view');
+                if (this.currentCamera === 'perspective') {
+                    // Store current camera position and rotation
+                    this.savedCameraState = {
+                        position: this.camera.position.clone(),
+                        rotation: this.camera.rotation.clone()
+                    };
+                    
+                    // Switch to top-down view
+                    this.currentCamera = '2d';
+                    
+                    // Position camera high above player
+                    this.camera.position.set(
+                        this.mesh.position.x,
+                        200,
+                        this.mesh.position.z
+                    );
+                    
+                    // Point camera straight down
+                    this.camera.rotation.x = -Math.PI / 2;
+                    this.camera.rotation.y = 0;
+                    this.camera.rotation.z = 0;
+                    
+                    console.log('Switched to top-down view');
+                } else {
+                    // Switch back to normal view
+                    this.currentCamera = 'perspective';
+                    
+                    // Restore saved camera state
+                    if (this.savedCameraState) {
+                        this.camera.position.copy(this.savedCameraState.position);
+                        this.camera.rotation.copy(this.savedCameraState.rotation);
+                    }
+                    
+                    console.log('Switched back to normal view');
+                }
+                break;
+                
             case 'KeyG':
                 // Teletransportar para o último andar (onde está o DK)
                 if (this.mesh) {
@@ -468,11 +490,6 @@ export class Player {
                     
                     console.log('Teleported to Donkey Kong floor');
                 }
-                break;
-            case 'KeyV':
-                // Alternar entre câmeras
-                this.currentCamera = this.currentCamera === 'perspective' ? 'orthographic' : 'perspective';
-                console.log('Switched to', this.currentCamera, 'camera');
                 break;
             case 'KeyA':
             case 'ArrowLeft':
@@ -537,14 +554,10 @@ export class Player {
     }
 
     onKeyUp(event) {
-        // Only process key events if controls are enabled
         if (!this.controlsEnabled) {
             return;
         }
 
-        console.log('Key released:', event.key, event.code);
-        
-        // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
         switch (event.code) {
             case 'KeyA':
             case 'ArrowLeft':
@@ -707,12 +720,6 @@ export class Player {
             return;
         }
 
-        // Atualizar a câmera ativa na cena
-        if (this.scene.parent) {
-            this.scene.parent.camera = this.currentCamera === 'perspective' ? 
-                this.camera : this.orthographicCamera;
-        }
-
         // Log se o Pointer Lock não estiver ativo mas não bloquear o movimento
         if (!this.isPointerLocked && this.enabled) {
             // Apenas logar uma vez por segundo para não sobrecarregar o console
@@ -776,31 +783,18 @@ export class Player {
         // Update current floor based on height
         this.currentFloor = Math.floor(this.mesh.position.y / this.floorHeight);
 
-        // Update camera
+        // Update camera position
         this.updateCameraPosition();
-
-        // DEBUG: Logging key state occasionally to verify input
-        if (Math.floor(Date.now() / 1000) % 5 === 0) {
-            if (this.isMoving()) {
-                console.log('Keys pressed:', 
-                    (this.keys.up ? 'UP ' : '') + 
-                    (this.keys.down ? 'DOWN ' : '') + 
-                    (this.keys.left ? 'LEFT ' : '') + 
-                    (this.keys.right ? 'RIGHT ' : '')
-                );
-            }
-        }
     }
 
     updateCameraPosition() {
-        // Se o jogador não existe, não fazer nada
         if (!this.mesh) {
             console.warn('updateCameraPosition: Player mesh not available.');
             return;
         }
 
         if (this.currentCamera === 'perspective') {
-            // Câmera em perspectiva (original)
+            // Original perspective camera behavior
             const rotation = new THREE.Euler(
                 this.cameraRotation.x,
                 this.cameraRotation.y,
@@ -819,31 +813,21 @@ export class Player {
             this.camera.position.copy(targetPosition);
             this.camera.rotation.copy(rotation);
             this.camera.rotation.x -= 0.2;
-        } else {
-            // Câmera ortográfica (2D)
-            const playerPos = this.mesh.position;
+        } else if (this.currentCamera === '2d') {
+            // Update top-down camera position to follow player
+            this.camera.position.x = this.mesh.position.x;
+            this.camera.position.z = this.mesh.position.z;
             
-            // Manter a câmera sempre à direita do jogador com uma distância fixa
-            this.orthographicCamera.position.set(
-                playerPos.x + 30, // Manter distância fixa no eixo X
-                playerPos.y,      // Seguir a altura do jogador
-                playerPos.z       // Seguir a posição Z do jogador
-            );
+            // Posicionar a câmera 49 unidades acima do piso atual
+            const nextFloorY = (this.currentFloor + 1) * this.floorHeight;
+            this.camera.position.y = nextFloorY - 1;
+            
+            // Keep camera pointed straight down
+            this.camera.rotation.x = -Math.PI / 2;
+            this.camera.rotation.y = 0;
+            this.camera.rotation.z = 0;
 
-            // Fazer a câmera olhar para o jogador
-            this.orthographicCamera.lookAt(playerPos);
-
-            // Rotacionar a câmera para ter uma visão lateral perfeita
-            this.orthographicCamera.rotation.y = -Math.PI / 2;
-
-            // Ajustar a área visível baseada na posição do jogador
-            const aspect = window.innerWidth / window.innerHeight;
-            const viewWidth = 15;
-            this.orthographicCamera.left = -viewWidth * aspect;
-            this.orthographicCamera.right = viewWidth * aspect;
-            this.orthographicCamera.top = viewWidth;
-            this.orthographicCamera.bottom = -viewWidth;
-            this.orthographicCamera.updateProjectionMatrix();
+            console.log('Camera Y position:', this.camera.position.y, 'Current floor:', this.currentFloor);
         }
     }
 
@@ -1135,6 +1119,61 @@ export class Player {
         if (this.camera) {
             this.camera.position.set(0, 5, 10);
             this.camera.lookAt(0, 0, 0);
+        }
+    }
+
+    toggle2DCamera() {
+        console.log('Toggling bird\'s eye view');
+        
+        if (this.currentCamera === 'perspective') {
+            console.log('Switching to bird\'s eye view');
+            this.currentCamera = '2d';
+            
+            // Store current perspective camera state
+            this.lastPerspectivePosition = {
+                position: this.camera.position.clone(),
+                rotation: this.camera.rotation.clone(),
+                fov: this.camera.fov
+            };
+
+            // Position orthographic camera high above the player
+            this.orthographicCamera.position.set(
+                this.mesh.position.x,
+                150,  // Altura bem alta para visão aérea
+                this.mesh.position.z
+            );
+            
+            // Apontar diretamente para baixo
+            this.orthographicCamera.rotation.x = -Math.PI / 2;
+            this.orthographicCamera.rotation.y = 0;
+            this.orthographicCamera.rotation.z = 0;
+            
+            // Atualizar a matriz de projeção
+            this.orthographicCamera.updateProjectionMatrix();
+            
+            // Trocar para a câmera ortográfica
+            if (this.scene.parent) {
+                this.scene.parent.camera = this.orthographicCamera;
+                console.log('Switched to bird\'s eye camera');
+            }
+            
+        } else {
+            console.log('Switching back to perspective view');
+            this.currentCamera = 'perspective';
+            
+            // Restaurar câmera perspectiva
+            if (this.lastPerspectivePosition) {
+                this.camera.position.copy(this.lastPerspectivePosition.position);
+                this.camera.rotation.copy(this.lastPerspectivePosition.rotation);
+                this.camera.fov = this.lastPerspectivePosition.fov;
+                this.camera.updateProjectionMatrix();
+            }
+            
+            // Trocar de volta para a câmera perspectiva
+            if (this.scene.parent) {
+                this.scene.parent.camera = this.camera;
+                console.log('Switched back to perspective camera');
+            }
         }
     }
 } 
