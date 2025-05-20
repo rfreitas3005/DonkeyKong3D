@@ -21,9 +21,11 @@ export class Player {
         
         // Reduced movement speeds
         this.moveSpeed = 0.075;
+        this.turnSpeed = 2.0;
+        this.jumpForce = 0.3; // Reduzido de 0.45 para 0.3
+        this.gravity = 0.02; // Aumentado levemente de 0.018 para 0.02
+        this.verticalSpeed = 0;
         this.climbSpeed = 0.04;
-        this.jumpForce = 0.35;
-        this.gravity = 0.020;
         
         this.velocity = new THREE.Vector3();
         this.currentFloor = 0;
@@ -215,13 +217,23 @@ export class Player {
             const next = this.animations[name];
             
             if (current !== next) {
-                // Crossfade to the new animation
-                current.fadeOut(0.2);
-                next.reset().fadeIn(0.2).play();
+                // Transição mais suave para o pulo
+                const fadeTime = name === 'jump' ? 0.1 : 0.2;
+                current.fadeOut(fadeTime);
+                next.reset().fadeIn(fadeTime).play();
+                
+                // Não ajustar mais a velocidade da animação de pulo
+                if (name === 'jump') {
+                    next.setEffectiveTimeScale(1.0);
+                }
+                
                 this.currentAnimation = name;
             }
         } else {
             this.animations[name].reset().play();
+            if (name === 'jump') {
+                this.animations[name].setEffectiveTimeScale(1.0);
+            }
             this.currentAnimation = name;
         }
     }
@@ -573,9 +585,9 @@ export class Player {
             }
         }
 
-        // Update animation mixer
+        // Update animation mixer com velocidade ajustada para o pulo
         if (this.mixer) {
-            const animSpeed = this.isJumping ? 1.2 : 1.0;
+            const animSpeed = this.isJumping ? 1.0 : 1.0; // Removida aceleração da animação de pulo
             this.mixer.update(deltaTime * animSpeed);
         }
 
@@ -890,12 +902,14 @@ export class Player {
 
     applyGravity() {
         if (this.isJumping) {
-            // Faster gravity during jump
-            const peakHeight = 0.05;
+            // Ajuste da gravidade durante o pulo
+            const peakHeight = 0.08; // Reduzido de 0.1 para 0.08
             if (Math.abs(this.velocity.y) < peakHeight) {
-                this.velocity.y -= this.gravity * 0.7;
+                this.velocity.y -= this.gravity * 0.9; // Ajustado de 0.8 para 0.9
+            } else if (this.velocity.y > 0) {
+                this.velocity.y -= this.gravity * 1.1; // Ajustado de 1.0 para 1.1
             } else {
-                this.velocity.y -= this.gravity * 1.2;
+                this.velocity.y -= this.gravity * 1.2; // Mantido em 1.2
             }
         } else {
             this.velocity.y -= this.gravity * 1.3;
@@ -904,17 +918,17 @@ export class Player {
         this.mesh.position.y += this.velocity.y;
 
         // Ground collision
-        const floorY = this.currentFloor * this.floorHeight + 1.0; // Ajustado de 1.25 para 1.0 para corrigir a flutuação
-        if (this.mesh.position.y < floorY) {
+        const floorY = this.currentFloor * this.floorHeight + 1.0;
+        if (this.mesh.position.y <= floorY) {
             this.mesh.position.y = floorY;
             this.velocity.y = 0;
             this.isJumping = false;
             
             // When landing, check if moving to play run animation, otherwise use idle2
             if (this.isMoving() && this.animations['run']) {
-                this.playAnimation('run');
+                this.playAnimation('run', true);
             } else if (this.animations['idle2']) {
-                this.playAnimation('idle2');
+                this.playAnimation('idle2', true);
             }
         }
     }

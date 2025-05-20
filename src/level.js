@@ -18,7 +18,9 @@ export class Level {
         this.stairs = [];
         this.barrels = [];
         this.barrelSpawnTimer = 0;
-        this.barrelSpawnInterval = 2000; // 2 seconds between spawns
+        this.barrelSpawnInterval = 1000; // Reduzido para 1 segundo (era 2000)
+        this.minSpawnInterval = 800; // Intervalo mínimo entre barris
+        this.maxSpawnInterval = 1500; // Intervalo máximo entre barris
         this.laneWidth = 6;
         this.floorHeight = 16;
         this.numFloors = 4;
@@ -551,7 +553,7 @@ export class Level {
         
         // Material de madeira
         const material = new THREE.MeshPhongMaterial({ 
-            color: 0xA05010,  // Marrom mais terroso para o barril
+            color: 0xA05010,
             specular: 0x222222,
             shininess: 15
         });
@@ -577,18 +579,20 @@ export class Level {
             barrelMesh.add(ring);
         });
 
-        // Position barrel at the stairs on the top floor
+        // Position barrel at the stairs on the top floor with posição X mais aleatória
         const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
         const spawnZ = this.floorLength * 0.15;
-        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
+        // Usar toda a largura da plataforma para spawn, deixando margem nas bordas
+        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 8);
         barrelParent.position.set(spawnX, spawnY, spawnZ);
 
-        // Add properties for movement
+        // Add properties for movement with velocidade mais variada
         barrelParent.userData.floor = this.numFloors - 1;
-        barrelParent.userData.speed = 70;
-        barrelParent.userData.rotationSpeed = 8;
+        barrelParent.userData.speed = 50 + Math.random() * 40; // Velocidade base entre 50 e 90
+        barrelParent.userData.rotationSpeed = 6 + Math.random() * 4; // Rotação entre 6 e 10
         barrelParent.userData.movingToBack = true;
         barrelParent.userData.verticalSpeed = 0;
+        barrelParent.userData.lateralSpeed = (Math.random() - 0.5) * 10; // Movimento lateral
         
         // Ensure barrel renders in front of other objects
         barrelParent.renderOrder = 2;
@@ -606,6 +610,9 @@ export class Level {
         // Add to scene and tracking array
         this.scene.add(barrelParent);
         this.barrels.push(barrelParent);
+
+        // Definir próximo intervalo de spawn aleatoriamente
+        this.barrelSpawnInterval = this.minSpawnInterval + Math.random() * (this.maxSpawnInterval - this.minSpawnInterval);
     }
 
     createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
@@ -662,6 +669,16 @@ export class Level {
                     barrel.position.z -= barrel.userData.speed * deltaTime;
                 }
 
+                // Movimento lateral mais suave
+                barrel.position.x += barrel.userData.lateralSpeed * deltaTime;
+
+                // Verificar colisão com as paredes laterais de forma mais suave
+                const halfWidth = this.boundaryWidth / 2 - 2;
+                if (Math.abs(barrel.position.x) > halfWidth) {
+                    barrel.userData.lateralSpeed *= -0.8; // Reduzir velocidade ao bater
+                    barrel.position.x = Math.sign(barrel.position.x) * halfWidth;
+                }
+
                 // Update rotation based on movement
                 if (barrel.userData.movingToBack) {
                     barrel.rotation.x += barrel.userData.rotationSpeed * deltaTime;
@@ -669,8 +686,8 @@ export class Level {
                     barrel.rotation.x -= barrel.userData.rotationSpeed * deltaTime;
                 }
 
-                // Apply gravity
-                const gravity = 40;
+                // Apply gravity mais forte para cair mais rápido
+                const gravity = 50;
                 barrel.userData.verticalSpeed -= gravity * deltaTime;
                 barrel.position.y += barrel.userData.verticalSpeed * deltaTime;
 
@@ -681,6 +698,9 @@ export class Level {
                 if (barrel.position.y < minHeight) {
                     barrel.position.y = minHeight;
                     barrel.userData.verticalSpeed = 0;
+                    
+                    // Remover os saltos aleatórios durante o percurso
+                    // Apenas um pequeno salto ao mudar de andar
                 }
 
                 // Check if barrel has reached the boundary walls
@@ -702,9 +722,13 @@ export class Level {
                     barrel.position.z = isEvenFloor ? 0 : this.floorLength;
                     barrel.userData.movingToBack = isEvenFloor;
                     
-                    // Set initial falling velocity and position
-                    barrel.userData.verticalSpeed = -5;
-                    barrel.position.y = (barrel.userData.floor * this.floorHeight) + 10; // Start higher for a more visible drop
+                    // Velocidade mais consistente ao mudar de andar
+                    barrel.userData.speed = 60 + Math.random() * 20; // Menos variação
+                    barrel.userData.lateralSpeed = (Math.random() - 0.5) * 5; // Movimento lateral mais suave
+                    
+                    // Pequeno salto apenas ao mudar de andar
+                    barrel.userData.verticalSpeed = 3;
+                    barrel.position.y = (barrel.userData.floor * this.floorHeight) + 5; // Altura inicial menor
                 }
             }
 
