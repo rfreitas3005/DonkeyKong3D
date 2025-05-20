@@ -433,8 +433,8 @@ export class Player {
         }
 
         switch (event.code) {
-            case 'KeyL':
-                console.log('L key pressed - changing camera view');
+            case 'KeyV':
+                console.log('V key pressed - changing camera view');
                 if (this.currentCamera === 'perspective') {
                     // Store current camera position and rotation
                     this.savedCameraState = {
