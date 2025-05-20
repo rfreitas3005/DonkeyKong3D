@@ -161,48 +161,44 @@ export class Level {
         const sideDetailGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.5, this.floorLength);
 
         for (let floor = 0; floor < this.numFloors; floor++) {
+            // Criar objeto pai para cada andar
+            const floorParent = new THREE.Object3D();
+            floorParent.position.set(0, floor * this.floorHeight, this.floorLength / 2);
+            
+            // Criar a plataforma principal como filho
             const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
-            
-            floorMesh.position.set(
-                0,
-                floor * this.floorHeight,
-                this.floorLength / 2
-            );
-            
             floorMesh.castShadow = true;
             floorMesh.receiveShadow = true;
-            
+            floorParent.add(floorMesh);
             this.floors.push(floorMesh);
-            this.scene.add(floorMesh);
 
-            const isRightToLeft = floor % 2 === 0;
+            // Adicionar vigas como filhos
             const numBeams = Math.floor(this.floorLength / 7);
-            
             for (let i = 0; i < numBeams; i++) {
                 const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-                
-                beam.position.set(
-                    0,
-                    floor * this.floorHeight + 1.1,
-                    i * 7 + 3.5
-                );
-                
+                beam.position.set(0, 1.1, -this.floorLength/2 + i * 7 + 3.5);
                 beam.castShadow = true;
                 beam.receiveShadow = true;
-                
-                this.scene.add(beam);
+                floorParent.add(beam);
             }
             
-            // Detalhes laterais
+            // Adicionar detalhes laterais como filhos
             const sideDetail = new THREE.Mesh(sideDetailGeometry, sideDetailMaterial);
-            sideDetail.position.set(
-                0,
-                floor * this.floorHeight - 0.75,
-                this.floorLength / 2
-            );
+            sideDetail.position.set(0, -0.75, 0);
             sideDetail.castShadow = true;
             sideDetail.receiveShadow = true;
-            this.scene.add(sideDetail);
+            floorParent.add(sideDetail);
+
+            // Configurar sombras para toda a estrutura
+            floorParent.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            // Adicionar o objeto pai completo à cena
+            this.scene.add(floorParent);
         }
     }
 
@@ -312,70 +308,82 @@ export class Level {
         // Cores das escadas no estilo Donkey Kong original
         const ladderSideColor = 0x29ADFF; // Azul claro/médio para as laterais
         const ladderRungColor = 0x29ADFF; // Mesma cor para os degraus
-        
+
         // Use as posições de escada definidas no construtor
         this.ladderPositions.forEach(position => {
             const floorY = position.floor * this.floorHeight;
             const ladderHeight = this.floorHeight;
             
-            // Criar as laterais da escada
+            // Criar o objeto pai da escada
+            const ladderParent = new THREE.Object3D();
+            ladderParent.position.set(0, floorY, position.z);
+            
+            // Criar as laterais da escada como filhos do objeto pai
             for (let side = -1; side <= 1; side += 2) {
                 const sideGeometry = new THREE.BoxGeometry(0.15, ladderHeight, ladderDepth);
                 const sideMaterial = new THREE.MeshPhongMaterial({ 
                     color: ladderSideColor,
-                    emissive: 0x003366, // Brilho azul profundo
+                    emissive: 0x003366,
                     emissiveIntensity: 0.2
                 });
                 const sideMesh = new THREE.Mesh(sideGeometry, sideMaterial);
-                
-                sideMesh.position.set(
-                    side * (ladderWidth / 2),
-                    floorY + ladderHeight / 2,
-                    position.z
-                );
-                
-                this.scene.add(sideMesh);
+                sideMesh.position.set(side * (ladderWidth / 2), ladderHeight / 2, 0);
+                ladderParent.add(sideMesh);
             }
             
-            // Criar os degraus da escada
+            // Criar os degraus como filhos do objeto pai
             const numRungs = Math.floor(ladderHeight / rungSpacing);
             for (let i = 0; i < numRungs; i++) {
                 const rungGeometry = new THREE.BoxGeometry(ladderWidth, 0.15, ladderDepth);
                 const rungMaterial = new THREE.MeshPhongMaterial({ 
                     color: ladderRungColor,
-                    emissive: 0x003366, // Brilho azul profundo
+                    emissive: 0x003366,
                     emissiveIntensity: 0.2
                 });
                 const rungMesh = new THREE.Mesh(rungGeometry, rungMaterial);
-                
-                rungMesh.position.set(
-                    0,
-                    floorY + (i * rungSpacing) + (rungSpacing / 2),
-                    position.z
-                );
-                
-                this.scene.add(rungMesh);
+                rungMesh.position.set(0, (i * rungSpacing) + (rungSpacing / 2), 0);
+                ladderParent.add(rungMesh);
             }
             
-            // Adicionar hitbox para detecção de colisão
-            const hitboxGeometry = new THREE.BoxGeometry(ladderWidth, ladderHeight, 1);
+            // Criar hitbox para detecção de colisão
+            const hitboxGeometry = new THREE.BoxGeometry(ladderWidth, ladderHeight, 2); // Aumentei a profundidade para 2
             const hitboxMaterial = new THREE.MeshBasicMaterial({
                 transparent: true,
                 opacity: 0.0
             });
             
             const hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
-            hitbox.position.set(
-                0,
-                floorY + ladderHeight / 2,
-                position.z
-            );
+            hitbox.position.set(0, ladderHeight / 2, 0);
             
-            hitbox.userData.isLadder = true;
-            hitbox.userData.floorIndex = position.floor;
+            // Configurar propriedades importantes para a hitbox
+            hitbox.userData = {
+                isLadder: true,
+                floorIndex: position.floor,
+                type: 'ladder',
+                ladderParent: ladderParent
+            };
             
+            // Adicionar a hitbox ao objeto pai
+            ladderParent.add(hitbox);
+            
+            // Importante: Adicionar a hitbox à lista de escadas E à cena
             this.stairs.push(hitbox);
-            this.scene.add(hitbox);
+            this.scene.add(hitbox); // Adicionar hitbox diretamente à cena
+            
+            // Ajustar posição global da hitbox
+            hitbox.position.copy(ladderParent.position);
+            hitbox.position.y += ladderHeight / 2;
+            
+            // Configurar sombras para toda a estrutura
+            ladderParent.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            
+            // Adicionar o objeto pai completo à cena
+            this.scene.add(ladderParent);
         });
     }
 
@@ -508,6 +516,9 @@ export class Level {
     }
 
     createBarrel() {
+        // Criar o objeto pai do barril
+        const barrelParent = new THREE.Object3D();
+        
         // Barril mais parecido com o jogo original - cilindro redondo com aros
         const segments = 24;
         const radiusTop = 1.2;
@@ -544,40 +555,11 @@ export class Level {
             shininess: 15
         });
 
-        const barrel = new THREE.Mesh(geometry, material);
+        const barrelMesh = new THREE.Mesh(geometry, material);
+        barrelMesh.rotation.z = Math.PI / 2;
+        barrelParent.add(barrelMesh);
 
-        // Position barrel at the stairs on the top floor
-        const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
-        const spawnZ = this.floorLength * 0.15;
-        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
-        barrel.position.set(spawnX, spawnY, spawnZ);
-
-        // Add properties for movement
-        barrel.userData.floor = this.numFloors - 1;
-        barrel.userData.speed = 70; // Velocidade mantida alta para gameplay
-        barrel.userData.rotationSpeed = 8;
-        barrel.userData.movingToBack = true;
-        barrel.userData.verticalSpeed = 0;
-        
-        // Ensure barrel renders in front of other objects
-        barrel.renderOrder = 2;
-        barrel.material.depthTest = true;
-        barrel.material.transparent = false;
-
-        // Initial rotation to lay barrel on its side
-        barrel.rotation.z = Math.PI / 2;
-        
-        // Adicionar detalhes visuais ao barril
-        this.addBarrelDetails(barrel);
-
-        // Add to scene and tracking array
-        this.scene.add(barrel);
-        this.barrels.push(barrel);
-    }
-
-    // Novo método para adicionar detalhes visuais aos barris
-    addBarrelDetails(barrel) {
-        // Adicionar detalhes visuais ao barril - aros metálicos mais nítidos
+        // Adicionar aros metálicos ao barril
         const ringGeometry = new THREE.TorusGeometry(1.25, 0.1, 8, 24);
         const ringMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x555555,
@@ -586,15 +568,43 @@ export class Level {
         });
         
         // Criar aros metálicos em posições espaçadas uniformemente
-        const positions = [-0.9, -0.3, 0.3, 0.9]; // Quatro aros ao longo do barril
-        positions.forEach(pos => {
+        const ringPositions = [-0.9, -0.3, 0.3, 0.9];
+        ringPositions.forEach(pos => {
             const ring = new THREE.Mesh(ringGeometry, ringMaterial);
             ring.position.set(0, pos, 0);
-            ring.rotation.x = Math.PI / 2; // Alinhar com o barril
-            barrel.add(ring);
+            ring.rotation.x = Math.PI / 2;
+            barrelMesh.add(ring);
         });
+
+        // Position barrel at the stairs on the top floor
+        const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
+        const spawnZ = this.floorLength * 0.15;
+        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
+        barrelParent.position.set(spawnX, spawnY, spawnZ);
+
+        // Add properties for movement
+        barrelParent.userData.floor = this.numFloors - 1;
+        barrelParent.userData.speed = 70;
+        barrelParent.userData.rotationSpeed = 8;
+        barrelParent.userData.movingToBack = true;
+        barrelParent.userData.verticalSpeed = 0;
         
-        return barrel;
+        // Ensure barrel renders in front of other objects
+        barrelParent.renderOrder = 2;
+        barrelMesh.material.depthTest = true;
+        barrelMesh.material.transparent = false;
+
+        // Configurar sombras para toda a estrutura
+        barrelParent.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+
+        // Add to scene and tracking array
+        this.scene.add(barrelParent);
+        this.barrels.push(barrelParent);
     }
 
     createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
