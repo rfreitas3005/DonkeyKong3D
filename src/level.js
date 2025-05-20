@@ -698,9 +698,29 @@ export class Level {
                 if (barrel.position.y < minHeight) {
                     barrel.position.y = minHeight;
                     barrel.userData.verticalSpeed = 0;
+                }
+
+                // Check for player collision
+                if (this.player && this.player.mesh) {
+                    // Create collision boxes
+                    const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
+                    const barrelBox = new THREE.Box3().setFromObject(barrel);
                     
-                    // Remover os saltos aleatórios durante o percurso
-                    // Apenas um pequeno salto ao mudar de andar
+                    // Adjust player hitbox to be more forgiving
+                    playerBox.min.y += 0.5; // Reduce bottom of hitbox
+                    playerBox.max.y -= 0.3; // Reduce top of hitbox
+                    playerBox.min.x += 0.2; // Reduce sides of hitbox
+                    playerBox.max.x -= 0.2;
+                    playerBox.min.z += 0.2;
+                    playerBox.max.z -= 0.2;
+                    
+                    // Check for collision
+                    if (barrelBox.intersectsBox(playerBox)) {
+                        console.log('Player hit by barrel!');
+                        if (this.game && this.game.onPlayerHit) {
+                            this.game.onPlayerHit('barrel');
+                        }
+                    }
                 }
 
                 // Check if barrel has reached the boundary walls

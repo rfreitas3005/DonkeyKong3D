@@ -22,8 +22,8 @@ export class Player {
         // Reduced movement speeds
         this.moveSpeed = 0.075;
         this.turnSpeed = 2.0;
-        this.jumpForce = 0.3; // Reduzido de 0.45 para 0.3
-        this.gravity = 0.02; // Aumentado levemente de 0.018 para 0.02
+        this.jumpForce = 0.35; // Reduzido de 0.45 para 0.35
+        this.gravity = 0.018; // Aumentado de 0.015 para 0.018
         this.verticalSpeed = 0;
         this.climbSpeed = 0.04;
         
@@ -79,8 +79,78 @@ export class Player {
         await this.loadCharacterModel();
     }
 
+    retargetAnimation(clip, targetSkeleton) {
+        // Map of common bone names
+        const boneMap = {
+            'mixamorig:hips': 'Hips',
+            'mixamorig:spine': 'Spine',
+            'mixamorig:spine1': 'Spine1',
+            'mixamorig:spine2': 'Spine2',
+            'mixamorig:neck': 'Neck',
+            'mixamorig:head': 'Head',
+            'mixamorig:leftupperarm': 'LeftArm',
+            'mixamorig:leftforearm': 'LeftForeArm',
+            'mixamorig:lefthand': 'LeftHand',
+            'mixamorig:rightupperarm': 'RightArm',
+            'mixamorig:rightforearm': 'RightForeArm',
+            'mixamorig:righthand': 'RightHand',
+            'mixamorig:leftupperleg': 'LeftUpLeg',
+            'mixamorig:leftleg': 'LeftLeg',
+            'mixamorig:leftfoot': 'LeftFoot',
+            'mixamorig:rightupperleg': 'RightUpLeg',
+            'mixamorig:rightleg': 'RightLeg',
+            'mixamorig:rightfoot': 'RightFoot'
+        };
+
+        const retargetedTracks = [];
+
+        clip.tracks.forEach(track => {
+            const trackSplit = track.name.split('.');
+            const boneName = trackSplit[0].toLowerCase();
+            const property = trackSplit[1];
+
+            // Try to find matching bone name
+            let targetBoneName = null;
+            
+            // First try direct match
+            targetSkeleton.traverse(bone => {
+                if (bone.isBone && bone.name.toLowerCase() === boneName) {
+                    targetBoneName = bone.name;
+                }
+            });
+
+            // If no direct match, try mapped name
+            if (!targetBoneName) {
+                for (const [source, target] of Object.entries(boneMap)) {
+                    if (boneName.includes(source.toLowerCase())) {
+                        targetSkeleton.traverse(bone => {
+                            if (bone.isBone && bone.name.includes(target)) {
+                                targetBoneName = bone.name;
+                            }
+                        });
+                        break;
+                    }
+                }
+            }
+
+            if (targetBoneName) {
+                // Clone the track and update the bone name
+                const newTrack = track.clone();
+                newTrack.name = `${targetBoneName}.${property}`;
+                retargetedTracks.push(newTrack);
+            }
+        });
+
+        // Create new animation clip with retargeted tracks
+        return new THREE.AnimationClip(
+            clip.name,
+            clip.duration,
+            retargetedTracks
+        );
+    }
+
     async loadCharacterModel() {
-        if (this.isLoaded) return; // Prevent multiple loads
+        if (this.isLoaded) return;
 
         const loader = new FBXLoader();
         
@@ -99,34 +169,31 @@ export class Player {
             model.castShadow = true;
             model.receiveShadow = true;
             
-            // Configurar sombras para todas as partes do modelo
-            model.traverse(child => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
+            // Log skeleton structure
+            console.log('Character skeleton structure:');
+            model.traverse(bone => {
+                if (bone.isBone) {
+                    console.log(`Found bone: ${bone.name}`);
+                }
+                if (bone.isMesh) {
+                    bone.castShadow = true;
+                    bone.receiveShadow = true;
                     
                     // Melhorar materiais para sombras mais realistas
-                    if (child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(m => {
+                    if (bone.material) {
+                        if (Array.isArray(bone.material)) {
+                            bone.material.forEach(m => {
                                 m.shadowSide = THREE.FrontSide;
                                 m.needsUpdate = true;
                             });
                         } else {
-                            child.material.shadowSide = THREE.FrontSide;
-                            child.material.needsUpdate = true;
+                            bone.material.shadowSide = THREE.FrontSide;
+                            bone.material.needsUpdate = true;
                         }
                     }
                 }
             });
 
-            // Criar um helper de sombra para debug (opcional)
-            if (this.scene.parent && this.scene.parent.renderer) {
-                const helper = new THREE.CameraHelper(this.scene.parent.sunLight?.shadow.camera);
-                helper.visible = false; // Deixar invisível por padrão
-                this.scene.add(helper);
-            }
-            
             // Clean up temporary mesh
             if (this.tempMesh && this.tempMesh.parent) {
                 this.scene.remove(this.tempMesh);
@@ -149,37 +216,45 @@ export class Player {
                 'idle': './models/idle.fbx',
                 'idle2': './models/idle2.fbx',
                 'run': './models/run.fbx',
-                'jump': './models/jump.fbx'
+                'jump': './models/jump.fbx',
+                'death': './models/death.fbx'
             };
 
             // Load each animation
             for (const [name, path] of Object.entries(animations)) {
                 try {
+                    console.log(`Loading animation: ${name} from path: ${path}`);
                     const animFile = await loader.loadAsync(path);
                     
                     if (!animFile.animations || animFile.animations.length === 0) {
+                        console.error(`No animations found in ${name} file at ${path}`);
                         continue;
                     }
 
-                    // Get the animation and retarget it to our model
-                    const anim = animFile.animations[0];
-                    const action = this.mixer.clipAction(anim);
-                    this.animations[name] = action;
+                    // Get the original animation clip
+                    const originalClip = animFile.animations[0];
                     
-                    // Remove any additional meshes that might have been loaded
-                    animFile.traverse(child => {
-                        if (child.isMesh) {
-                            child.removeFromParent();
-                            if (child.geometry) child.geometry.dispose();
-                            if (child.material) {
-                                if (Array.isArray(child.material)) {
-                                    child.material.forEach(m => m.dispose());
-                                } else {
-                                    child.material.dispose();
-                                }
-                            }
-                        }
-                    });
+                    // Retarget the animation
+                    const retargetedClip = this.retargetAnimation(originalClip, model);
+                    
+                    // Create the animation action
+                    const action = this.mixer.clipAction(retargetedClip);
+                    
+                    // Configure death animation
+                    if (name === 'death') {
+                        console.log('Configuring death animation');
+                        action.loop = THREE.LoopOnce;
+                        action.clampWhenFinished = true;
+                        action.repetitions = 1;
+                        
+                        // Log the retargeted bones
+                        console.log('Death animation retargeted to bones:', 
+                            retargetedClip.tracks.map(track => track.name));
+                    }
+                    
+                    this.animations[name] = action;
+                    console.log(`Animation ${name} successfully retargeted and ready`);
+                    
                 } catch (error) {
                     console.error(`Error loading animation ${name}:`, error);
                 }
@@ -198,44 +273,89 @@ export class Player {
         } catch (error) {
             console.error('Error loading character model:', error);
             if (this.tempMesh) {
-                this.tempMesh.material.opacity = 1.0; // Tornar visível para debug
-                this.tempMesh.material.color.set(0xFF0000); // Vermelho para indicar erro
+                this.tempMesh.material.opacity = 1.0;
+                this.tempMesh.material.color.set(0xFF0000);
                 this.mesh = this.tempMesh;
-                this.isLoaded = true; // Marcar como carregado mesmo com erro
+                this.isLoaded = true;
             }
         }
     }
 
     playAnimation(name, force = false) {
-        if (!this.mixer || !this.animations[name]) return;
+        console.log(`Attempting to play animation: ${name}, force: ${force}`);
+        
+        if (!this.mixer) {
+            console.error('No animation mixer available');
+            return;
+        }
+        
+        if (!this.animations[name]) {
+            console.error(`Animation ${name} not found in available animations:`, Object.keys(this.animations));
+            return;
+        }
+        
+        // If we're currently playing death animation, don't interrupt it unless forced
+        if (this.currentAnimation === 'death' && !force) {
+            console.log('Death animation in progress, not interrupting');
+            return;
+        }
         
         // If it's the same animation and we're not forcing it, don't restart
-        if (this.currentAnimation === name && !force) return;
+        if (this.currentAnimation === name && !force) {
+            console.log(`Animation ${name} already playing`);
+            return;
+        }
         
+        console.log(`Playing animation: ${name}`);
+        
+        // Special handling for death animation
+        if (name === 'death') {
+            console.log('Initializing death animation sequence');
+            // Stop all current animations immediately
+            this.mixer.stopAllAction();
+            
+            const deathAnim = this.animations[name];
+            // Configure death animation
+            deathAnim.setLoop(THREE.LoopOnce);
+            deathAnim.clampWhenFinished = true;
+            deathAnim.setEffectiveTimeScale(1.0);
+            deathAnim.setEffectiveWeight(1.0);
+            deathAnim.reset();
+            deathAnim.play();
+            
+            // Add event listener for animation completion
+            this.mixer.addEventListener('finished', (e) => {
+                if (e.action === deathAnim) {
+                    console.log('Death animation completed');
+                }
+            });
+            
+            this.currentAnimation = name;
+            return;
+        }
+        
+        // Normal animation handling
         if (this.currentAnimation) {
             const current = this.animations[this.currentAnimation];
             const next = this.animations[name];
             
             if (current !== next) {
-                // Transição mais suave para o pulo
                 const fadeTime = name === 'jump' ? 0.1 : 0.2;
                 current.fadeOut(fadeTime);
                 next.reset().fadeIn(fadeTime).play();
                 
-                // Não ajustar mais a velocidade da animação de pulo
                 if (name === 'jump') {
                     next.setEffectiveTimeScale(1.0);
                 }
-                
-                this.currentAnimation = name;
             }
         } else {
             this.animations[name].reset().play();
             if (name === 'jump') {
                 this.animations[name].setEffectiveTimeScale(1.0);
             }
-            this.currentAnimation = name;
         }
+        
+        this.currentAnimation = name;
     }
 
     setupControls() {
@@ -557,11 +677,27 @@ export class Player {
     update(deltaTime) {
         // Check if controls are enabled before processing any updates
         if (!this.controlsEnabled) {
+            // Even when controls are disabled, we should update the animation mixer
+            if (this.mixer) {
+                this.mixer.update(deltaTime);
+            }
+            return;
+        }
+
+        // If we're playing death animation, only update the mixer
+        if (this.currentAnimation === 'death') {
+            if (this.mixer) {
+                this.mixer.update(deltaTime);
+            }
             return;
         }
 
         // Verificação inicial - se o jogador não estiver habilitado, não atualize nada
         if (!this.enabled) {
+            // Still update mixer for death animation
+            if (this.mixer) {
+                this.mixer.update(deltaTime);
+            }
             return;
         }
 
@@ -903,16 +1039,16 @@ export class Player {
     applyGravity() {
         if (this.isJumping) {
             // Ajuste da gravidade durante o pulo
-            const peakHeight = 0.08; // Reduzido de 0.1 para 0.08
+            const peakHeight = 0.1; // Reduzido de 0.12 para 0.1
             if (Math.abs(this.velocity.y) < peakHeight) {
-                this.velocity.y -= this.gravity * 0.9; // Ajustado de 0.8 para 0.9
+                this.velocity.y -= this.gravity * 0.8; // Aumentado de 0.7 para 0.8
             } else if (this.velocity.y > 0) {
-                this.velocity.y -= this.gravity * 1.1; // Ajustado de 1.0 para 1.1
+                this.velocity.y -= this.gravity * 1.0; // Aumentado de 0.9 para 1.0
             } else {
-                this.velocity.y -= this.gravity * 1.2; // Mantido em 1.2
+                this.velocity.y -= this.gravity * 1.2; // Aumentado de 1.1 para 1.2
             }
         } else {
-            this.velocity.y -= this.gravity * 1.3;
+            this.velocity.y -= this.gravity * 1.3; // Aumentado de 1.2 para 1.3
         }
         
         this.mesh.position.y += this.velocity.y;

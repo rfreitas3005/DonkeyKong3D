@@ -4,6 +4,8 @@ import { Level } from './level.js';
 import { DebugMenu } from './debug.js';
 import { GameMenu } from './menu.js';
 import Stats from 'three/examples/jsm/libs/stats.module';
+import { GameOverScreen } from './gameOverScreen.js';
+import { PauseMenu } from './pauseMenu.js';
 
 export class Game {
     constructor() {
@@ -77,6 +79,11 @@ export class Game {
                 }
             }
         });
+
+        // Add game over screen
+        this.gameOverScreen = null;
+        
+        this.init();
     }
 
     createCountdownElement() {
@@ -254,12 +261,38 @@ export class Game {
     }
 
     onPlayerHit(source) {
-        // Check for invincibility before applying damage
-        if (this.mods.invincible) {
-            return; // Player is invincible, ignore hit
+        if (source === 'barrel' && !this.mods.invincible) {
+            console.log('Player hit by barrel, triggering death sequence');
+            
+            // Disable player controls immediately
+            if (this.player) {
+                this.player.enabled = false;
+                this.player.disableControls();
+                
+                // Play death animation if available
+                if (this.player.animations && this.player.animations['death']) {
+                    console.log('Found death animation, attempting to play');
+                    // Force play the death animation
+                    this.player.playAnimation('death', true);
+                } else {
+                    console.error('Death animation not found in player animations:', 
+                        this.player.animations ? Object.keys(this.player.animations) : 'no animations available');
+                }
+            }
+            
+            // Stop barrel spawning
+            if (this.level) {
+                this.level.gameStarted = false;
+                this.level.stopBarrels();
+            }
+
+            // Show game over screen after animation
+            setTimeout(() => {
+                console.log('Death animation finished, showing game over screen');
+                this.gameOverScreen.show();
+                this.isRunning = false;
+            }, 1300); // Wait for 1.3 seconds before showing game over
         }
-        
-        // ... rest of the existing hit logic ...
     }
 
     async init() {
@@ -372,6 +405,9 @@ export class Game {
 
             // Forçar uma renderização inicial
             this.renderer.render(this.scene, this.camera);
+
+            // Initialize game over screen
+            this.gameOverScreen = new GameOverScreen(this);
 
             console.log('Game initialization complete');
         } catch (error) {
@@ -492,21 +528,79 @@ export class Game {
 
     start() {
         console.log('Starting game...');
+        
+        // Reset game state
+        this.isRunning = false;
+        this.isPaused = false;
+        
+        // Clear the scene and recreate everything
         if (!this.scene) {
             this.init();
         } else {
+            // Clear existing objects
+            while(this.scene.children.length > 0) { 
+                this.scene.remove(this.scene.children[0]); 
+            }
+            
             // Reset and recreate level and player
             this.level = new Level(this.scene);
             this.player = new Player(this.scene, this.camera);
             
-            // Garantir que o nível tenha a referência para o Game e Player
+            // Ensure level has references to Game and Player
             this.level.game = this;
             this.level.player = this.player;
             
-            // Resetar o tempo do jogo
+            // Reset game time
             this.time = 0;
+            this.clock.start();
+            
+            // Reset camera
+            this.camera.position.set(0, 5, 10);
+            this.camera.lookAt(0, 0, 0);
+            
+            // Ensure proper lighting
+            this.setupLights();
         }
+        
+        // Start the countdown sequence
         this.startCountdown();
+    }
+
+    setupLights() {
+        // Ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        this.scene.add(ambientLight);
+
+        // Sun light
+        const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+        sunLight.position.set(-40, 40, 100);
+        sunLight.target.position.set(0, 0, 100);
+        sunLight.castShadow = true;
+        
+        // Shadow settings
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 500;
+        sunLight.shadow.camera.left = -50;
+        sunLight.shadow.camera.right = 50;
+        sunLight.shadow.camera.top = 50;
+        sunLight.shadow.camera.bottom = -50;
+        sunLight.shadow.bias = -0.0001;
+        sunLight.shadow.radius = 2;
+        
+        this.scene.add(sunLight);
+        this.scene.add(sunLight.target);
+
+        // Fill light
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        fillLight.position.set(40, 40, 100);
+        this.scene.add(fillLight);
+
+        // Back light
+        const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        backLight.position.set(0, 40, -100);
+        this.scene.add(backLight);
     }
 
     pause() {
@@ -564,9 +658,6 @@ export class Game {
     returnToMainMenu() {
         console.log('Returning to main menu...');
         
-        // First hide the pause menu
-        this.menu.hidePauseMenu();
-        
         // Reset game state
         this.isPaused = false;
         this.isRunning = false;
@@ -597,6 +688,7 @@ export class Game {
         // Reset and recreate level
         if (this.level) {
             this.level = new Level(this.scene);
+            this.level.game = this;
         }
         
         // Reset and recreate player
@@ -619,7 +711,9 @@ export class Game {
         
         // Show the main menu
         console.log('Showing main menu...');
-        this.menu.showMenu();
+        if (this.menu) {
+            this.menu.showMenu();
+        }
         
         // Ensure the scene background is black
         if (this.scene) {
@@ -676,5 +770,48 @@ export class Game {
         if (this.renderer) {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         }
+    }
+
+    // Add method to show main menu
+    showMainMenu() {
+        // Hide all game elements
+        if (this.scene) {
+            this.scene.visible = false;
+        }
+        
+        // Reset game state
+        this.reset();
+        
+        // Show main menu
+        if (this.menu) {
+            this.menu.show();
+        }
+    }
+
+    // Enhance reset method
+    reset() {
+        // Reset game state
+        this.isRunning = false;
+        this.isPaused = false;
+        
+        // Reset level
+        if (this.level) {
+            this.level.reset();
+        }
+        
+        // Reset player
+        if (this.player) {
+            this.player.reset();
+        }
+        
+        // Reset camera
+        if (this.camera) {
+            this.camera.position.set(0, 5, 10);
+            this.camera.lookAt(0, 0, 0);
+        }
+        
+        // Clear any existing UI elements
+        const elementsToRemove = document.querySelectorAll('.game-instructions, .click-instruction, #pointer-lock-instruction');
+        elementsToRemove.forEach(el => el.remove());
     }
 }
