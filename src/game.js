@@ -22,6 +22,11 @@ export class Game {
         this.lastTimeStamp = 0;
         this.countdownElement = null;
         this.debugMenu = new DebugMenu(this);
+        // Música de fundo
+        this.backgroundMusic = new Audio('https://files.catbox.moe/5q4ifm.mp3');
+        this.backgroundMusic.loop = true;
+        this.backgroundMusic.volume = 0.5;
+
 
         // Initialize menu first
         this.menu = new GameMenu(this);
@@ -469,6 +474,11 @@ export class Game {
 
     startGameplay() {
         try {
+            if (this.backgroundMusic && this.backgroundMusic.paused) {
+                this.backgroundMusic.play().catch(err => {
+                    console.warn('Autoplay bloqueado. Clique necessário para iniciar som.', err);
+                });
+            }            
             console.log('Starting gameplay...');
             
             if (this.scene) {
@@ -629,7 +639,8 @@ export class Game {
         if (this.level) {
             this.level.pauseBarrels();
         }
-        
+        if (this.backgroundMusic) this.backgroundMusic.pause();
+
         this.lastTimeStamp = this.clock.getElapsedTime();
         this.clock.stop();
     }
@@ -653,6 +664,10 @@ export class Game {
         }
         
         this.clock.start();
+        if (this.backgroundMusic && this.backgroundMusic.paused) {
+            this.backgroundMusic.play();
+        }
+        
     }
 
     returnToMainMenu() {
@@ -661,6 +676,11 @@ export class Game {
         // Reset game state
         this.isPaused = false;
         this.isRunning = false;
+        
+        if (this.backgroundMusic) {
+            this.backgroundMusic.pause();
+            this.backgroundMusic.currentTime = 0;
+        }
         
         // Stop and reset the clock
         this.clock.stop();
