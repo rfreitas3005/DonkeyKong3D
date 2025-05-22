@@ -1,4 +1,4 @@
-class OptionsMenu {
+export class OptionsMenu {
     constructor(game) {
         this.game = game;
         this.container = null;

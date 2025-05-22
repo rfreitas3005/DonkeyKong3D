@@ -6,6 +6,7 @@ import { GameMenu } from './menu.js';
 import Stats from 'three/examples/jsm/libs/stats.module';
 import { GameOverScreen } from './gameOverScreen.js';
 import { PauseMenu } from './pauseMenu.js';
+import { CollectibleManager } from './collectibles.js';
 
 export class Game {
     constructor() {
@@ -87,6 +88,15 @@ export class Game {
 
         // Add game over screen
         this.gameOverScreen = null;
+        
+        this.collectibleManager = null;
+        
+        // Inicializar score e high score
+        this.score = 0;
+        this.highScore = parseInt(localStorage.getItem('donkeyKong3D_highScore')) || 0;
+        
+        // Criar displays de score
+        this.initializeScoreDisplay();
         
         this.init();
     }
@@ -266,37 +276,41 @@ export class Game {
     }
 
     onPlayerHit(source) {
-        if (source === 'barrel' && !this.mods.invincible) {
-            console.log('Player hit by barrel, triggering death sequence');
-            
-            // Disable player controls immediately
-            if (this.player) {
-                this.player.enabled = false;
-                this.player.disableControls();
-                
-                // Play death animation if available
-                if (this.player.animations && this.player.animations['death']) {
-                    console.log('Found death animation, attempting to play');
-                    // Force play the death animation
-                    this.player.playAnimation('death', true);
-                } else {
-                    console.error('Death animation not found in player animations:', 
-                        this.player.animations ? Object.keys(this.player.animations) : 'no animations available');
-                }
-            }
-            
-            // Stop barrel spawning
-            if (this.level) {
-                this.level.gameStarted = false;
-                this.level.stopBarrels();
-            }
-
-            // Show game over screen after animation
-            setTimeout(() => {
-                console.log('Death animation finished, showing game over screen');
-                this.gameOverScreen.show();
-                this.isRunning = false;
-            }, 1300); // Wait for 1.3 seconds before showing game over
+        if (!this.player || this.player.isInvincible) return;
+        
+        console.log('Player hit by:', source);
+        console.log('Current score:', this.score); // Debug log
+        console.log('Current high score:', this.highScore); // Debug log
+        
+        // Parar o jogo imediatamente
+        this.isRunning = false;
+        this.isPaused = true;
+        
+        // Desabilitar jogador
+        this.player.enabled = false;
+        this.player.disableControls();
+        
+        // Parar música
+        if (this.backgroundMusic) {
+            this.backgroundMusic.pause();
+        }
+        
+        // Parar barris
+        if (this.level) {
+            this.level.stopBarrels();
+            this.level.clearBarrels();
+        }
+        
+        // Salvar score
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+            localStorage.setItem('donkeyKong3D_highScore', this.highScore.toString());
+        }
+        
+        // Mostrar game over com os scores corretos
+        if (this.gameOverScreen) {
+            console.log('Showing game over screen with scores:', this.score, this.highScore); // Debug log
+            this.gameOverScreen.show(this.score, this.highScore);
         }
     }
 
@@ -395,11 +409,14 @@ export class Game {
 
             // Initialize level and player
             this.level = new Level(this.scene);
-            this.player = new Player(this.scene, this.camera);
+            this.player = new Player(this.scene, this.camera, this);
 
             // Garantir que o nível tenha a referência para o Game e Player
             this.level.game = this;
             this.level.player = this.player;
+
+            // Inicializar CollectibleManager
+            this.collectibleManager = new CollectibleManager(this.scene);
 
             // Start rendering loop
             this.animate();
@@ -422,54 +439,142 @@ export class Game {
     }
 
     async startCountdown() {
-        try {
-            console.log('Starting countdown sequence...');
-            
-            // Criar background temporário preto durante a contagem
-            const tempBackground = document.createElement('div');
-            tempBackground.style.position = 'fixed';
-            tempBackground.style.top = '0';
-            tempBackground.style.left = '0';
-            tempBackground.style.width = '100%';
-            tempBackground.style.height = '100%';
-            tempBackground.style.backgroundColor = 'black';
-            tempBackground.style.zIndex = '500'; // Entre o jogo (0) e o contador (1000)
-            document.body.appendChild(tempBackground);
-            
-            if (!this.countdownElement) {
-                console.log('Creating countdown element...');
-                this.createCountdownElement();
+        console.log('Starting countdown...');
+        
+        // Criar elemento de contagem regressiva com estilo retro
+        const countdownElement = document.createElement('div');
+        countdownElement.style.position = 'fixed';
+        countdownElement.style.top = '50%';
+        countdownElement.style.left = '50%';
+        countdownElement.style.transform = 'translate(-50%, -50%)';
+        countdownElement.style.fontSize = '120px';
+        countdownElement.style.fontFamily = 'Press Start 2P, monospace';
+        countdownElement.style.color = '#ff69b4';
+        countdownElement.style.textShadow = '0 0 10px #ff69b4, 0 0 20px #ff69b4, 0 0 30px #ff69b4';
+        countdownElement.style.zIndex = '1002';
+        countdownElement.style.opacity = '0';
+        countdownElement.style.transition = 'opacity 0.2s ease-in-out';
+        
+        // Criar background animado retro melhorado
+        const retroBg = document.createElement('div');
+        retroBg.id = 'retro-bg-countdown';
+        retroBg.style.position = 'fixed';
+        retroBg.style.top = '0';
+        retroBg.style.left = '0';
+        retroBg.style.width = '100vw';
+        retroBg.style.height = '100vh';
+        retroBg.style.zIndex = '1000';
+        retroBg.style.pointerEvents = 'none';
+        retroBg.style.overflow = 'hidden';
+        // Gradiente animado
+        retroBg.style.background = 'linear-gradient(180deg, #2a003a 0%, #ff0066 100%)';
+        retroBg.style.animation = 'bgPulse 2.5s ease-in-out infinite alternate';
+        
+        // Linhas horizontais brilhantes
+        const lines = document.createElement('div');
+        lines.style.position = 'absolute';
+        lines.style.top = '0';
+        lines.style.left = '0';
+        lines.style.width = '100%';
+        lines.style.height = '100%';
+        lines.style.background = 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 2px, transparent 2px, transparent 18px)';
+        lines.style.animation = 'moveLines 1.2s linear infinite';
+        lines.style.pointerEvents = 'none';
+        retroBg.appendChild(lines);
+        
+        // Scanlines mais marcantes
+        const scanline = document.createElement('div');
+        scanline.style.position = 'absolute';
+        scanline.style.top = '0';
+        scanline.style.left = '0';
+        scanline.style.width = '100%';
+        scanline.style.height = '100%';
+        scanline.style.background = 'linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.22) 60%)';
+        scanline.style.backgroundSize = '100% 4px';
+        scanline.style.pointerEvents = 'none';
+        scanline.style.zIndex = '1001';
+        scanline.style.animation = 'scanline 0.09s linear infinite';
+        retroBg.appendChild(scanline);
+        
+        // Efeito de vignette nas bordas
+        const vignette = document.createElement('div');
+        vignette.style.position = 'absolute';
+        vignette.style.top = '0';
+        vignette.style.left = '0';
+        vignette.style.width = '100%';
+        vignette.style.height = '100%';
+        vignette.style.pointerEvents = 'none';
+        vignette.style.zIndex = '1002';
+        vignette.style.background = 'radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,0.7) 100%)';
+        retroBg.appendChild(vignette);
+        
+        // Adicionar keyframes para animações
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes scanline {
+                0% { transform: translateY(0); }
+                100% { transform: translateY(4px); }
             }
-
-            this.countdownElement.style.display = 'block';
-            
-            // Make sure player is in idle animation
-            if (this.player && this.player.animations['idle2']) {
-                console.log('Setting player to idle2 animation...');
-                this.player.playAnimation('idle2');
+            @keyframes moveLines {
+                0% { background-position-y: 0; }
+                100% { background-position-y: 18px; }
             }
-
-            // Countdown sequence
-            console.log('Starting countdown numbers...');
-            for (let i = 3; i > 0; i--) {
-                this.countdownElement.textContent = i;
-                await new Promise(resolve => setTimeout(resolve, 1000));
+            @keyframes bgPulse {
+                0% { filter: brightness(1) contrast(1); }
+                100% { filter: brightness(1.15) contrast(1.2) saturate(1.2); }
             }
-            
-            this.countdownElement.textContent = 'GO!';
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            this.countdownElement.style.display = 'none';
-            
-            // Remover o background temporário
-            document.body.removeChild(tempBackground);
-
-            console.log('Countdown complete, starting gameplay...');
-            // Now start the actual game
-            this.startGameplay();
-        } catch (error) {
-            console.error('Error during countdown sequence:', error);
-            throw error;
-        }
+            @keyframes countdownPulse {
+                0% { transform: scale(1); opacity: 0; }
+                50% { transform: scale(1.2); opacity: 1; }
+                100% { transform: scale(1); opacity: 0; }
+            }
+            @keyframes retroGlow {
+                0% { text-shadow: 0 0 10px #ff69b4, 0 0 20px #ff69b4, 0 0 30px #ff69b4; }
+                50% { text-shadow: 0 0 20px #ff69b4, 0 0 30px #ff69b4, 0 0 40px #ff69b4; }
+                100% { text-shadow: 0 0 10px #ff69b4, 0 0 20px #ff69b4, 0 0 30px #ff69b4; }
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(retroBg);
+        document.body.appendChild(countdownElement);
+        
+        // Sequência de contagem regressiva mais rápida
+        const countdown = [3, 2, 1, 'GO!'];
+        let index = 0;
+        
+        const showNumber = () => {
+            if (index < countdown.length) {
+                countdownElement.textContent = countdown[index];
+                countdownElement.style.opacity = '1';
+                countdownElement.style.animation = 'countdownPulse 0.5s ease-in-out, retroGlow 1s infinite';
+                if (this.onCountdownSound) {
+                    this.onCountdownSound(countdown[index]);
+                }
+                index++;
+                setTimeout(showNumber, 500);
+            } else {
+                countdownElement.style.animation = 'fadeOut 0.5s ease-in-out';
+                countdownElement.style.opacity = '0';
+                retroBg.style.transition = 'opacity 0.5s ease-in-out';
+                retroBg.style.opacity = '0';
+                setTimeout(() => {
+                    countdownElement.remove();
+                    retroBg.remove();
+                    style.remove();
+                    this.startGameplay();
+                }, 500);
+            }
+        };
+        showNumber();
     }
 
     startGameplay() {
@@ -527,6 +632,17 @@ export class Game {
             if (this.renderer && this.camera) {
                 this.renderer.render(this.scene, this.camera);
             }
+
+            // Iniciar spawn de collectibles
+            if (this.collectibleManager) {
+                this.collectibleManager.start();
+            }
+
+            // Mostrar o score container quando o jogo começa
+            const scoreContainer = document.getElementById('score-container');
+            if (scoreContainer) {
+                scoreContainer.style.display = 'block';
+            }
         } catch (error) {
             console.error('Error starting gameplay:', error);
             if (error.stack) {
@@ -554,7 +670,10 @@ export class Game {
             
             // Reset and recreate level and player
             this.level = new Level(this.scene);
-            this.player = new Player(this.scene, this.camera);
+            this.player = new Player(this.scene, this.camera, this);
+            
+            // Adicionar referência ao game no player
+            this.player.game = this;
             
             // Ensure level has references to Game and Player
             this.level.game = this;
@@ -715,7 +834,7 @@ export class Game {
         if (this.player) {
             this.player.enabled = false;
             this.player.disableControls();
-            this.player = new Player(this.scene, this.camera);
+            this.player = new Player(this.scene, this.camera, this);
         }
         
         // Reset camera
@@ -744,16 +863,24 @@ export class Game {
         if (this.renderer && this.scene && this.camera) {
             this.renderer.render(this.scene, this.camera);
         }
+
+        // Esconder o score container quando voltar ao menu
+        const scoreContainer = document.getElementById('score-container');
+        if (scoreContainer) {
+            scoreContainer.style.display = 'none';
+        }
+
+        this.saveHighScore(); // Salvar high score ao voltar para o menu
     }
 
     exitGame() {
         window.close();
     }
 
-    animate() {
+    animate(currentTime) {
         if (!this.renderer) return;
 
-        requestAnimationFrame(() => this.animate());
+        requestAnimationFrame(() => this.animate(currentTime));
 
         if (this.stats) this.stats.begin();
 
@@ -772,6 +899,12 @@ export class Game {
                 this.level.update(deltaTime);
             }
             if (this.debugMenu) this.debugMenu.update();
+
+            // Update collectibles
+            if (this.collectibleManager) {
+                this.collectibleManager.update(deltaTime, currentTime, this.player);
+                this.collectibleManager.checkCollisions(this.player);
+            }
         }
         
         // Sempre renderizar a cena, mesmo quando pausado
@@ -810,28 +943,119 @@ export class Game {
 
     // Enhance reset method
     reset() {
-        // Reset game state
-        this.isRunning = false;
-        this.isPaused = false;
+        this.saveHighScore(); // Salvar high score antes de resetar
+        this.score = 0;
+        this.updateScoreDisplay();
+        // ... resto do código de reset ...
+    }
+
+    initializeScoreDisplay() {
+        // Score display
+        this.scoreDisplay = document.createElement('div');
+        this.scoreDisplay.style.position = 'fixed';
+        this.scoreDisplay.style.top = '20px';
+        this.scoreDisplay.style.right = '20px';
+        this.scoreDisplay.style.fontFamily = "'Press Start 2P', monospace";
+        this.scoreDisplay.style.fontSize = '24px';
+        this.scoreDisplay.style.color = '#FFD700';
+        this.scoreDisplay.style.textShadow = '2px 2px 4px #000';
+        this.scoreDisplay.style.zIndex = '1000';
+        this.scoreDisplay.textContent = `SCORE: ${this.score}`;
+        document.body.appendChild(this.scoreDisplay);
+
+        // High score display
+        this.highScoreDisplay = document.createElement('div');
+        this.highScoreDisplay.style.position = 'fixed';
+        this.highScoreDisplay.style.top = '60px';
+        this.highScoreDisplay.style.right = '20px';
+        this.highScoreDisplay.style.fontFamily = "'Press Start 2P', monospace";
+        this.highScoreDisplay.style.fontSize = '24px';
+        this.highScoreDisplay.style.color = '#FFD700';
+        this.highScoreDisplay.style.textShadow = '2px 2px 4px #000';
+        this.highScoreDisplay.style.zIndex = '1000';
+        this.highScoreDisplay.textContent = `HI-SCORE: ${this.highScore}`;
+        document.body.appendChild(this.highScoreDisplay);
+    }
+
+    updateScore(points) {
+        console.log('Updating score with points:', points); // Debug log
+        this.score = (this.score || 0) + points;
         
-        // Reset level
-        if (this.level) {
-            this.level.reset();
+        // Atualizar high score se necessário
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+            localStorage.setItem('donkeyKong3D_highScore', this.highScore.toString());
         }
         
-        // Reset player
-        if (this.player) {
-            this.player.reset();
+        // Atualizar displays
+        if (this.scoreDisplay) {
+            this.scoreDisplay.textContent = `SCORE: ${this.score}`;
+        }
+        if (this.highScoreDisplay) {
+            this.highScoreDisplay.textContent = `HI-SCORE: ${this.highScore}`;
         }
         
-        // Reset camera
-        if (this.camera) {
-            this.camera.position.set(0, 5, 10);
-            this.camera.lookAt(0, 0, 0);
+        console.log('Current score:', this.score); // Debug log
+        console.log('Current high score:', this.highScore); // Debug log
+    }
+
+    updateScoreDisplay() {
+        const scoreDisplay = document.getElementById('score-display');
+        if (scoreDisplay) {
+            scoreDisplay.textContent = `SCORE: ${this.score}`;
+        }
+    }
+
+    updateHighScoreDisplay() {
+        const highScoreDisplay = document.getElementById('high-score-display');
+        if (highScoreDisplay) {
+            highScoreDisplay.textContent = `HI-SCORE: ${this.highScore}`;
+        }
+    }
+
+    loadHighScore() {
+        const saved = localStorage.getItem('donkeyKong3D_highScore');
+        console.log('Loaded high score:', saved); // Debug log
+        return saved ? parseInt(saved) : 0;
+    }
+
+    saveHighScore() {
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+            localStorage.setItem('donkeyKong3D_highScore', this.highScore.toString());
+            console.log('Saved new high score:', this.highScore); // Debug log
+        }
+    }
+
+    onPlayerDeath() {
+        this.saveHighScore(); // Salvar high score quando o jogador morre
+        // ... resto do código de morte ...
+    }
+
+    gameOver() {
+        console.log('Game Over called - Current score:', this.score); // Debug log
+        console.log('Current high score:', this.highScore); // Debug log
+        
+        // Atualizar high score uma última vez se necessário
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+            localStorage.setItem('donkeyKong3D_highScore', this.highScore.toString());
+            console.log('New high score saved:', this.highScore); // Debug log
         }
         
-        // Clear any existing UI elements
-        const elementsToRemove = document.querySelectorAll('.game-instructions, .click-instruction, #pointer-lock-instruction');
-        elementsToRemove.forEach(el => el.remove());
+        // Garantir que o gameOverScreen existe
+        if (!this.gameOverScreen) {
+            console.log('Creating new GameOverScreen'); // Debug log
+            this.gameOverScreen = new GameOverScreen(this);
+        }
+        
+        // Mostrar tela de game over com as pontuações
+        console.log('Showing game over screen with scores:', this.score, this.highScore); // Debug log
+        this.gameOverScreen.show(this.score, this.highScore);
+    }
+
+    restart() {
+        this.score = 0; // Resetar score ao reiniciar
+        // ... resto do código de restart ...
     }
 }

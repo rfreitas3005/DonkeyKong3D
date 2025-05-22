@@ -3,166 +3,180 @@ import * as THREE from 'three';
 export class GameOverScreen {
     constructor(game) {
         this.game = game;
-        this.container = null;
-        this.visible = false;
-        this.createScreen();
-    }
-
-    createScreen() {
-        // Create container with fade-in animation
         this.container = document.createElement('div');
         this.container.style.position = 'fixed';
         this.container.style.top = '0';
         this.container.style.left = '0';
         this.container.style.width = '100%';
         this.container.style.height = '100%';
-        this.container.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+        this.container.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
         this.container.style.display = 'none';
+        this.container.style.flexDirection = 'column';
+        this.container.style.justifyContent = 'center';
+        this.container.style.alignItems = 'center';
+        this.container.style.zIndex = '1000';
         this.container.style.opacity = '0';
         this.container.style.transition = 'opacity 0.5s ease-in-out';
-        this.container.style.zIndex = '1000';
-
-        // Create content container
-        const content = document.createElement('div');
-        content.style.position = 'absolute';
-        content.style.top = '50%';
-        content.style.left = '50%';
-        content.style.transform = 'translate(-50%, -50%)';
-        content.style.textAlign = 'center';
-        content.style.width = '100%';
-
-        // Game Over text with retro style
-        const title = document.createElement('h1');
+        
+        // Game Over título
+        const title = document.createElement('div');
         title.textContent = 'GAME OVER';
-        title.style.fontSize = '96px';
-        title.style.marginBottom = '40px';
-        title.style.fontFamily = "'Press Start 2P', Arial, sans-serif";
-        title.style.color = '#ff0055';
-        title.style.textShadow = '4px 4px 0 #000';
-        title.style.animation = 'pulse 2s infinite';
-        title.style.letterSpacing = '-8px';
-        title.style.wordSpacing = '-20px';
-        content.appendChild(title);
-
+        title.style.color = '#ff69b4';
+        title.style.fontSize = '72px';
+        title.style.fontFamily = "'Press Start 2P', cursive";
+        title.style.marginBottom = '20px';
+        title.style.textShadow = '0 0 20px #ff69b4';
+        
         // Mensagem sarcástica
-        const message = document.createElement('p');
+        const message = document.createElement('div');
         message.textContent = 'FOR GOD SAKE... THE GAME IS NOT THAT HARD';
-        message.style.fontSize = '19px';
-        message.style.marginBottom = '80px';
-        message.style.fontFamily = "'Press Start 2P', Arial, sans-serif";
-        message.style.color = 'white';
-        message.style.textShadow = '2px 2px 0 #000';
-        message.style.padding = '0 20px';
-        message.style.lineHeight = '1.5';
-        content.appendChild(message);
-
-        // Create button container
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.flexDirection = 'column';
-        buttonContainer.style.alignItems = 'center';
-        buttonContainer.style.gap = '20px';
-        buttonContainer.style.marginTop = '0px';
-
-        // Add buttons with menu style
-        const buttons = [
-            { text: 'RESTART', handler: () => this.handleRestart() },
-            { text: 'RETURN TO MENU', handler: () => this.handleReturnToMenu() }
-        ];
-
-        buttons.forEach((btn, index) => {
-            const button = document.createElement('button');
-            button.textContent = btn.text;
-            this.styleButton(button);
-            
-            // Add hover and focus effects
-            button.addEventListener('mouseover', () => this.onButtonHover(button));
-            button.addEventListener('mouseout', () => this.onButtonOut(button));
-            button.addEventListener('click', btn.handler);
-            
-            buttonContainer.appendChild(button);
-        });
-
-        content.appendChild(buttonContainer);
-        this.container.appendChild(content);
+        message.style.color = '#ff69b4';
+        message.style.fontSize = '24px';
+        message.style.fontFamily = "'Press Start 2P', cursive";
+        message.style.marginBottom = '40px';
+        message.style.textShadow = '0 0 10px #ff69b4';
+        
+        // Final Score
+        const finalScore = document.createElement('div');
+        finalScore.id = 'final-score';
+        finalScore.style.marginBottom = '20px';
+        
+        // High Score
+        const highScore = document.createElement('div');
+        highScore.id = 'high-score';
+        highScore.style.marginBottom = '40px';
+        
+        // Botões
+        const restartButton = document.createElement('button');
+        restartButton.textContent = 'RESTART';
+        this.styleButton(restartButton);
+        restartButton.onclick = () => this.game.restart();
+        
+        const menuButton = document.createElement('button');
+        menuButton.textContent = 'RETURN TO MENU';
+        this.styleButton(menuButton);
+        menuButton.onclick = () => this.game.returnToMenu();
+        
+        // Adicionar elementos ao container
+        this.container.appendChild(title);
+        this.container.appendChild(message);
+        this.container.appendChild(finalScore);
+        this.container.appendChild(highScore);
+        this.container.appendChild(restartButton);
+        this.container.appendChild(menuButton);
+        
         document.body.appendChild(this.container);
-
-        // Add CSS animations
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.05); }
-                100% { transform: scale(1); }
-            }
-            @keyframes buttonPulse {
-                0% { transform: scale(1); filter: brightness(1); }
-                50% { transform: scale(1.1); filter: brightness(1.5); }
-                100% { transform: scale(1); filter: brightness(1); }
-            }
-        `;
-        document.head.appendChild(style);
     }
 
     styleButton(button) {
-        Object.assign(button.style, {
-            padding: '15px 30px',
-            fontSize: '24px',
-            fontFamily: "'Press Start 2P', Arial, sans-serif",
-            color: 'white',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            textShadow: '2px 2px 0 #000',
-            letterSpacing: '-4px',
-            wordSpacing: '-8px',
-            outline: 'none',
-            textTransform: 'uppercase'
-        });
+        button.style.backgroundColor = 'transparent';
+        button.style.border = '2px solid #ff69b4';
+        button.style.color = '#ff69b4';
+        button.style.padding = '15px 30px';
+        button.style.margin = '10px';
+        button.style.fontSize = '24px';
+        button.style.fontFamily = "'Press Start 2P', cursive";
+        button.style.cursor = 'pointer';
+        button.style.transition = 'all 0.3s ease';
+        button.style.textShadow = '0 0 10px #ff69b4';
+        button.style.boxShadow = '0 0 10px #ff69b4';
+        
+        button.onmouseover = () => {
+            button.style.backgroundColor = '#ff69b4';
+            button.style.color = 'black';
+        };
+        
+        button.onmouseout = () => {
+            button.style.backgroundColor = 'transparent';
+            button.style.color = '#ff69b4';
+        };
     }
 
-    onButtonHover(button) {
-        button.style.animation = 'buttonPulse 1s infinite';
-        button.style.color = '#ff0055';
-    }
-
-    onButtonOut(button) {
-        button.style.animation = 'none';
-        button.style.color = 'white';
-    }
-
-    show() {
-        this.visible = true;
-        this.container.style.display = 'block';
-        // Force a reflow before setting opacity for smooth transition
-        this.container.offsetHeight;
-        this.container.style.opacity = '1';
+    show(finalScore, highScore) {
+        console.log('GameOverScreen.show called with:', finalScore, highScore); // Debug log
+        
+        if (!this.container) {
+            console.error('Container not found!');
+            return;
+        }
+        
+        // Garantir que os valores não sejam undefined
+        const displayFinalScore = typeof finalScore === 'number' ? finalScore : 0;
+        const displayHighScore = typeof highScore === 'number' ? highScore : 0;
+        
+        console.log('Display values:', displayFinalScore, displayHighScore); // Debug log
+        
+        // Limpar o container existente
+        while (this.container.firstChild) {
+            this.container.removeChild(this.container.firstChild);
+        }
+        
+        // Game Over título
+        const title = document.createElement('div');
+        title.textContent = 'GAME OVER';
+        title.style.color = '#ff69b4';
+        title.style.fontSize = '72px';
+        title.style.fontFamily = "'Press Start 2P', cursive";
+        title.style.marginBottom = '20px';
+        title.style.textShadow = '0 0 20px #ff69b4';
+        
+        // Mensagem sarcástica
+        const message = document.createElement('div');
+        message.textContent = 'FOR GOD SAKE... THE GAME IS NOT THAT HARD';
+        message.style.color = '#ff69b4';
+        message.style.fontSize = '24px';
+        message.style.fontFamily = "'Press Start 2P', cursive";
+        message.style.marginBottom = '40px';
+        message.style.textShadow = '0 0 10px #ff69b4';
+        
+        // Final Score com estilo retro
+        const finalScoreText = document.createElement('div');
+        finalScoreText.textContent = `FINAL SCORE: ${displayFinalScore}`;
+        finalScoreText.style.color = '#FFD700';
+        finalScoreText.style.fontSize = '36px';
+        finalScoreText.style.fontFamily = "'Press Start 2P', cursive";
+        finalScoreText.style.marginBottom = '20px';
+        finalScoreText.style.textShadow = '0 0 10px #FFD700';
+        
+        // High Score com estilo retro
+        const highScoreText = document.createElement('div');
+        highScoreText.textContent = `HI-SCORE: ${displayHighScore}`;
+        highScoreText.style.color = '#FFD700';
+        highScoreText.style.fontSize = '36px';
+        highScoreText.style.fontFamily = "'Press Start 2P', cursive";
+        highScoreText.style.marginBottom = '40px';
+        highScoreText.style.textShadow = '0 0 10px #FFD700';
+        
+        // Botões
+        const restartButton = document.createElement('button');
+        restartButton.textContent = 'RESTART';
+        this.styleButton(restartButton);
+        restartButton.onclick = () => this.game.restart();
+        
+        const menuButton = document.createElement('button');
+        menuButton.textContent = 'RETURN TO MENU';
+        this.styleButton(menuButton);
+        menuButton.onclick = () => this.game.returnToMenu();
+        
+        // Adicionar todos os elementos ao container
+        this.container.appendChild(title);
+        this.container.appendChild(message);
+        this.container.appendChild(finalScoreText);
+        this.container.appendChild(highScoreText);
+        this.container.appendChild(restartButton);
+        this.container.appendChild(menuButton);
+        
+        // Mostrar o container com fade in
+        this.container.style.display = 'flex';
+        setTimeout(() => {
+            this.container.style.opacity = '1';
+        }, 100);
     }
 
     hide() {
         this.container.style.opacity = '0';
         setTimeout(() => {
-            this.visible = false;
             this.container.style.display = 'none';
         }, 500); // Match the transition duration
-    }
-
-    handleRestart() {
-        this.hide();
-        if (this.game) {
-            // Reset game state
-            this.game.reset();
-            // Start countdown and game like when clicking play
-            this.game.start();
-        }
-    }
-
-    handleReturnToMenu() {
-        this.hide();
-        if (this.game) {
-            // Return to main menu
-            this.game.returnToMainMenu();
-        }
     }
 } 
