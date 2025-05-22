@@ -398,7 +398,7 @@ input[type="range"]::-webkit-slider-thumb {
 .credits-back-button {
     position: fixed;
     bottom: 30px;
-    left: 30px;
+    right: 30px;
     padding: 10px 20px;
     font-family: 'Press Start 2P', monospace;
     font-size: 14px;
@@ -425,6 +425,6 @@ input[type="range"]::-webkit-slider-thumb {
         transform: rotateX(20deg) translateY(100%);
     }
     100% {
-        transform: rotateX(20deg) translateY(-250%);
+        transform: rotateX(20deg) translateY(-1000%);
     }
 } 

@@ -7,6 +7,7 @@ import './menu.css';
 
 export class GameMenu {
     constructor(game) {
+        this.starWarsAudio = null;
         if (!game) {
             throw new Error('Game instance is required for menu initialization');
         }
@@ -331,13 +332,12 @@ export class GameMenu {
         if (this.menuContainer) {
             const menuContent = document.createElement('div');
             menuContent.className = 'credits-container';
-            
+    
             const creditsContent = document.createElement('div');
             creditsContent.className = 'credits-content';
-            
+    
             creditsContent.innerHTML = `
                 <div class="credits-title">DONKEY KONG 3D</div>
-                
                 <div class="credits-text">
                     <h2>Desenvolvimento</h2>
                     <p>Programação</p>
@@ -370,6 +370,7 @@ export class GameMenu {
                     <p>Música de Fundo</p>
                     <p>Different Heaven & EH!DE – "My Heart"</p>
                     <p>(Drumstep | NCS)</p>
+                    <p>Star Wars Main Theme (Full)</p>
                     <br>
                     <p>Efeitos Sonoros</p>
                     <p>Ricardo Freitas</p>
@@ -405,23 +406,36 @@ export class GameMenu {
                     <p>e de entretenimento pessoal.</p>
                 </div>
             `;
-            
+    
             const backButton = document.createElement('button');
             backButton.className = 'credits-back-button';
             backButton.textContent = 'Voltar ao Menu';
             backButton.addEventListener('click', () => {
+                if (this.starWarsAudio) {
+                    this.starWarsAudio.pause();
+                    this.starWarsAudio.currentTime = 0;
+                }
                 this.menuContainer.innerHTML = '';
                 this.createMainMenu();
                 this.showMenu();
             });
-            
+    
             menuContent.appendChild(creditsContent);
             menuContent.appendChild(backButton);
-            
+    
             this.menuContainer.innerHTML = '';
             this.menuContainer.appendChild(menuContent);
+    
+            // 🎵 Música Star Wars
+            this.starWarsAudio = new Audio('https://files.catbox.moe/tt6015.mp3');
+            this.starWarsAudio.volume = this.options.volume ?? 0.5;
+            this.starWarsAudio.loop = true;
+            this.starWarsAudio.play().catch(err => {
+                console.warn('Autoplay bloqueado:', err);
+            });
         }
     }
+    
 
     dispose() {
         document.removeEventListener('keydown', this._keydownHandler);
