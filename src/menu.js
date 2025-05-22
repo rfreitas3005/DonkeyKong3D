@@ -330,42 +330,88 @@ export class GameMenu {
     showCredits() {
         if (this.menuContainer) {
             const menuContent = document.createElement('div');
-            menuContent.className = 'menu-content';
+            menuContent.className = 'credits-container';
             
-            const title = document.createElement('div');
-            title.className = 'game-title';
-            title.textContent = 'CREDITS';
+            const creditsContent = document.createElement('div');
+            creditsContent.className = 'credits-content';
             
-            const credits = document.createElement('div');
-            credits.className = 'menu-item';
-            credits.style.whiteSpace = 'pre-line';
-            credits.innerHTML = `
-                Game Design
-                Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas
-
-                Programming
-                Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas
-
-                Art & Animation
-                Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas
-
-                Music & Sound
-                Alexandre Ferreira, Rodrigo Venancio, Ricardo Freitas
-
-                © 2025
+            creditsContent.innerHTML = `
+                <div class="credits-title">DONKEY KONG 3D</div>
+                
+                <div class="credits-text">
+                    <h2>Desenvolvimento</h2>
+                    <p>Programação</p>
+                    <p>Ricardo Freitas</p>
+                    <p>Alexandre Ferreira</p>
+                    <p>Rodrigo Venâncio</p>
+                    <br>
+                    <p>Design de Níveis</p>
+                    <p>Ricardo Freitas</p>
+                    <p>Alexandre Ferreira</p>
+                    <p>Rodrigo Venâncio</p>
+                    <br>
+                    <p>Game Design</p>
+                    <p>Ricardo Freitas</p>
+                    <p>Alexandre Ferreira</p>
+                    <p>Rodrigo Venâncio</p>
+                    <br><br>
+                    <h2>Arte</h2>
+                    <p>Modelagem 3D</p>
+                    <p>Ricardo Freitas</p>
+                    <p>Alexandre Ferreira</p>
+                    <p>Rodrigo Venâncio</p>
+                    <br>
+                    <p>Texturas e Animações</p>
+                    <p>Ricardo Freitas</p>
+                    <p>Alexandre Ferreira</p>
+                    <p>Rodrigo Venâncio</p>
+                    <br><br>
+                    <h2>Áudio</h2>
+                    <p>Música de Fundo</p>
+                    <p>Different Heaven & EH!DE – "My Heart"</p>
+                    <p>(Drumstep | NCS)</p>
+                    <br>
+                    <p>Efeitos Sonoros</p>
+                    <p>Ricardo Freitas</p>
+                    <p>Alexandre Ferreira</p>
+                    <br><br>
+                    <h2>Agradecimentos Especiais</h2>
+                    <p>Professor Miguel Ângelo Correia de Melo</p>
+                    <p>Professor Maximino Esteves Correia Bessa</p>
+                    <p>Bruno Miguel Eira Peixoto</p>
+                    <br><br>
+                    <h2>Comunidades</h2>
+                    <p>YouTube</p>
+                    <p>Reddit</p>
+                    <br><br>
+                    <h2>Inspiração</h2>
+                    <p>Donkey Kong (1981), da Nintendo</p>
+                    <br><br>
+                    <h2>Ferramentas Utilizadas</h2>
+                    <p>Engine: Three.js (JavaScript WebGL Framework)</p>
+                    <p>IDE: Visual Studio Code</p>
+                    <p>Assistente de Código: ChatGPT</p>
+                    <p>Modelagem 3D: Blender, Mixamo</p>
+                    <p>Hospedagem de Ficheiros: Catbox</p>
+                    <br><br>
+                    <h2>Direitos e Licenças</h2>
+                    <p>Donkey Kong é uma marca registrada da Nintendo.</p>
+                    <p>Este projeto é um fan game não comercial,</p>
+                    <p>criado exclusivamente para fins educacionais</p>
+                    <p>e de entretenimento pessoal.</p>
+                </div>
             `;
             
             const backButton = document.createElement('button');
-            backButton.className = 'menu-back-button';
-            backButton.textContent = 'Back to Menu';
+            backButton.className = 'credits-back-button';
+            backButton.textContent = 'Voltar ao Menu';
             backButton.addEventListener('click', () => {
                 this.menuContainer.innerHTML = '';
                 this.createMainMenu();
                 this.showMenu();
             });
             
-            menuContent.appendChild(title);
-            menuContent.appendChild(credits);
+            menuContent.appendChild(creditsContent);
             menuContent.appendChild(backButton);
             
             this.menuContainer.innerHTML = '';
