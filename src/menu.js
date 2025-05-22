@@ -387,6 +387,10 @@ export class GameMenu {
                     <h2>Inspiração</h2>
                     <p>Donkey Kong (1981), da Nintendo</p>
                     <br><br>
+                    <h2>Inspiração Visual</h2>
+                    <p>Estilo dos créditos inspirado em Star Wars (1977)</p>
+                    <p>Criação original de George Lucas</p>
+                    <br><br>
                     <h2>Ferramentas Utilizadas</h2>
                     <p>Engine: Three.js (JavaScript WebGL Framework)</p>
                     <p>IDE: Visual Studio Code</p>
