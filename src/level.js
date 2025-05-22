@@ -1076,54 +1076,87 @@ export class Level {
     }
 
     updateBarrels(deltaTime) {
-        try {
-            for (let i = this.barrels.length - 1; i >= 0; i--) {
-                const barrel = this.barrels[i];
-                if (!barrel || !barrel.position) continue;
-                
-                // Atualizar posição do barril
-                barrel.position.x += barrel.velocity.x * deltaTime;
-                barrel.position.y += barrel.velocity.y * deltaTime;
-                barrel.position.z += barrel.velocity.z * deltaTime;
-                
-                // Rotação do barril
-                barrel.rotation.x += 5 * deltaTime;
-                
-                // Verificar colisão com o jogador usando distância
-                if (this.player && this.player.mesh && !this.game.isPaused) {
-                    const playerPos = this.player.mesh.position;
-                    const barrelPos = barrel.position;
+        // Atualizar todos os barris
+        for (let i = this.barrels.length - 1; i >= 0; i--) {
+            const barrel = this.barrels[i];
+            const mesh = barrel.mesh;
+            
+            // Aplicar gravidade se não estiver no chão
+            if (!barrel.onGround) {
+                barrel.velocity.y -= 9.8 * deltaTime; // Gravidade
+            }
+            
+            // Atualizar posição
+            mesh.position.x += barrel.velocity.x * deltaTime;
+            mesh.position.y += barrel.velocity.y * deltaTime;
+            
+            // Rotacionar o barril
+            mesh.rotation.y += barrel.angularVelocity.y * deltaTime;
+            mesh.rotation.x += barrel.angularVelocity.x * deltaTime;
+            
+            // Verificar colisão com plataformas
+            const checkPlatformCollision = () => {
+                for (let j = 0; j < this.platforms.length; j++) {
+                    const platform = this.platforms[j];
                     
-                    // Calcular distância entre jogador e barril
-                    const dx = playerPos.x - barrelPos.x;
-                    const dy = playerPos.y - barrelPos.y;
-                    const dz = playerPos.z - barrelPos.z;
-                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    // Ignorar plataformas já ultrapassadas
+                    if (j < barrel.lastPlatformIndex - 1) continue;
                     
-                    // Se a distância for menor que 2 unidades (ajuste este valor conforme necessário)
-                    if (distance < 2) {
-                        console.log('Player hit by barrel! Distance:', distance);
+                    // Calcular limites da plataforma
+                    const platformMinX = platform.position.x - platform.scale.x/2;
+                    const platformMaxX = platform.position.x + platform.scale.x/2;
+                    const platformY = platform.position.y + platform.scale.y/2;
+                    
+                    // Verificar se o barril está acima da plataforma e caindo
+                    if (mesh.position.x >= platformMinX && mesh.position.x <= platformMaxX &&
+                        mesh.position.y - 0.5 <= platformY && mesh.position.y - 0.4 >= platformY &&
+                        barrel.velocity.y < 0) {
                         
-                        // Garantir que o game existe e chamar onPlayerHit
-                        if (this.game) {
-                            // Parar o movimento do barril
-                            barrel.velocity.set(0, 0, 0);
-                            
-                            // Chamar onPlayerHit imediatamente
-                            this.game.onPlayerHit('barrel');
-                            return; // Sair do loop após detectar colisão
+                        // Posicionar em cima da plataforma
+                        mesh.position.y = platformY + 0.5;
+                        
+                        // Inverter velocidade X se chegou na ponta da plataforma
+                        if (mesh.position.x <= platformMinX + 1 || mesh.position.x >= platformMaxX - 1) {
+                            barrel.velocity.x = -barrel.velocity.x;
                         }
+                        
+                        // Reduzir velocidade vertical (amortecimento)
+                        barrel.velocity.y = 0;
+                        barrel.onGround = true;
+                        barrel.lastPlatformIndex = j;
+                        
+                        // Mudar velocidade com base no índice da plataforma (alternar direção em plataformas alternadas)
+                        barrel.velocity.x = (j % 2 === 0) ? -5 : 5;
+                        
+                        return true;
                     }
                 }
-
-                // Remover barris que saíram da área do jogo
-                if (barrel.position.y < -10 || barrel.position.x < -20 || barrel.position.x > 20) {
-                    this.scene.remove(barrel);
-                    this.barrels.splice(i, 1);
+                
+                // Se chegou aqui, não está tocando nenhuma plataforma
+                barrel.onGround = false;
+                return false;
+            };
+            
+            checkPlatformCollision();
+            
+            // Verificar colisão com o jogador
+            if (this.player && this.player.mesh) {
+                const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
+                const barrelBox = new THREE.Box3().setFromObject(mesh);
+                
+                if (barrelBox.intersectsBox(playerBox)) {
+                    // Colisão com o jogador
+                    if (this.game.onPlayerHit) {
+                        this.game.onPlayerHit('barrel');
+                    }
                 }
             }
-        } catch (error) {
-            console.error('Error in updateBarrels:', error);
+            
+            // Remover barris que saíram da área do jogo
+            if (mesh.position.y < -10 || mesh.position.x < -20 || mesh.position.x > 20) {
+                this.scene.remove(mesh);
+                this.barrels.splice(i, 1);
+            }
         }
     }
 

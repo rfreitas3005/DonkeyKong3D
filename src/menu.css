@@ -1,0 +1,338 @@
+/* Remove local font loading and use Google Fonts */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Press Start 2P', monospace;
+}
+
+.menu-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(20,0,40,0.95) 0%, rgba(10,0,20,0.95) 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.menu-content {
+    text-align: center;
+    padding: 2rem;
+}
+
+.game-title {
+    color: #ff69b4;
+    font-size: 48px;
+    text-shadow: 0 0 20px rgba(255, 105, 180, 0.8);
+    margin-bottom: 4rem;
+    animation: glow 2s ease-in-out infinite alternate;
+    letter-spacing: 2px;
+    line-height: 1.5;
+}
+
+.game-title div {
+    margin: 10px 0;
+}
+
+.menu-item {
+    color: #fff;
+    font-size: 24px;
+    margin: 1.5rem 0;
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    position: relative;
+    letter-spacing: 2px;
+}
+
+.menu-item:hover, .menu-item.selected {
+    color: #ff69b4;
+    transform: scale(1.1);
+    text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+}
+
+.menu-item.selected::before {
+    content: '>';
+    position: absolute;
+    left: -2rem;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+@keyframes glow {
+    from {
+        text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+    }
+    to {
+        text-shadow: 0 0 20px rgba(255, 105, 180, 0.8),
+                     0 0 30px rgba(255, 105, 180, 0.6);
+    }
+}
+
+.press-enter {
+    color: #fff;
+    font-size: 16px;
+    margin-top: 4rem;
+    opacity: 0.8;
+    animation: blink 1s infinite;
+    letter-spacing: 1px;
+}
+
+.hi-score {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    color: #ffd700;
+    font-size: 24px;
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+    letter-spacing: 1px;
+}
+
+.hitbox-info {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    color: #fff;
+    font-size: 16px;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 5px;
+    letter-spacing: 1px;
+}
+
+/* Options menu styles */
+.options-container {
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 2rem;
+    border-radius: 10px;
+}
+
+.option-item {
+    margin: 1.5rem 0;
+}
+
+.option-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #ff69b4;
+}
+
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(255, 105, 180, 0.1);
+    padding: 0.5rem;
+    border-radius: 5px;
+}
+
+input[type="range"] {
+    flex-grow: 1;
+    height: 4px;
+    background: #ff69b4;
+    appearance: none;
+    border-radius: 2px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #ff69b4;
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+}
+
+.value-display {
+    min-width: 3rem;
+    text-align: right;
+    color: #ff69b4;
+}
+
+/* Scanline effect */
+.scanline {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0) 50%,
+        rgba(0, 0, 0, 0.1) 50%
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 1001;
+    opacity: 0.05;
+    animation: scanline 10s linear infinite;
+}
+
+@keyframes scanline {
+    from { transform: translateY(0); }
+    to { transform: translateY(100%); }
+}
+
+/* Transition animations */
+.fade-out {
+    animation: fadeOut 0.5s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* Pause menu specific styles */
+.menu-container[data-menu="pause"] {
+    background: linear-gradient(135deg, rgba(0,0,0,0.8) 0%, rgba(20,0,40,0.8) 100%);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.menu-container[data-menu="pause"] .menu-content {
+    transform: scale(0.9);
+    animation: pauseMenuIn 0.3s ease forwards;
+}
+
+@keyframes pauseMenuIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.menu-back-button {
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+    background: none;
+    border: 2px solid #ff69b4;
+    padding: 0.8rem 1.5rem;
+    cursor: pointer;
+    margin-top: 2rem;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+.menu-back-button:hover {
+    color: #ff69b4;
+    background: rgba(255, 105, 180, 0.1);
+    box-shadow: 0 0 15px rgba(255, 105, 180, 0.3);
+}
+
+.options-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 2rem;
+}
+
+.menu-button {
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+    background: none;
+    border: 2px solid #ff69b4;
+    padding: 0.8rem 1.5rem;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+.menu-button:hover {
+    color: #ff69b4;
+    background: rgba(255, 105, 180, 0.1);
+    box-shadow: 0 0 15px rgba(255, 105, 180, 0.3);
+}
+
+.save-button {
+    background: rgba(255, 105, 180, 0.1);
+}
+
+.save-button:hover {
+    background: rgba(255, 105, 180, 0.2);
+}
+
+/* Game Over specific styles */
+.game-over-title {
+    font-size: 72px !important;
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    text-shadow: 
+        2px 2px 0 #0000ff,  /* Blue shadow */
+        -2px -2px 0 #ff0000; /* Red shadow */
+    color: #ffd700; /* Yellow base color */
+    margin-bottom: 20px !important;
+    animation: floatGameOver 2s ease-in-out infinite !important;
+}
+
+/* Animação suave de flutuação para o Game Over */
+@keyframes floatGameOver {
+    0% {
+        transform: translateY(0);
+        text-shadow: 
+            2px 2px 0 #0000ff,
+            -2px -2px 0 #ff0000;
+    }
+    50% {
+        transform: translateY(-10px);
+        text-shadow: 
+            3px 3px 0 #0000ff,
+            -3px -3px 0 #ff0000;
+    }
+    100% {
+        transform: translateY(0);
+        text-shadow: 
+            2px 2px 0 #0000ff,
+            -2px -2px 0 #ff0000;
+    }
+}
+
+.game-message {
+    color: #ffd700;
+    font-size: 24px;
+    font-family: 'Press Start 2P', cursive;
+    margin: 20px 0 60px 0;
+    text-shadow: 
+        1px 1px 0 #0000ff,
+        -1px -1px 0 #ff0000;
+    text-align: center;
+    line-height: 1.5;
+}
+
+.final-score, .hi-score {
+    color: #FFD700;
+    font-size: 36px;
+    font-family: 'Press Start 2P', cursive;
+    margin: 20px 0;
+    text-shadow: 0 0 10px #FFD700;
+    text-align: center;
+}
+
+/* Adicionando margem específica para o final-score */
+.final-score {
+    margin-bottom: 60px;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+} 

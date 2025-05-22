@@ -2,10 +2,9 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 
 export class Player {
-    constructor(scene, camera, game) {
+    constructor(scene, camera) {
         this.scene = scene;
         this.camera = camera;
-        this.game = game;
         this.orthographicCamera = null;
         this.currentCamera = 'perspective';
         this.mesh = null;
@@ -42,16 +41,6 @@ export class Player {
         this.cameraRotation = new THREE.Euler(0, 0, 0);
         this.mouseSensitivity = 0.002;
         this.isPointerLocked = false;
-
-        // Valores base para os power-ups
-        this.baseSpeed = 0.075;
-        this.baseJumpForce = 0.35;
-        this.isInvincible = false;
-        
-        // Timers para os power-ups
-        this.speedBoostTimer = null;
-        this.jumpBoostTimer = null;
-        this.invincibilityTimer = null;
 
         this.setupControls();
         this.init();
@@ -894,30 +883,22 @@ export class Player {
     }
 
     onDeath() {
-        console.log('Player died - Current score:', this.game.score); // Debug log
-        
-        this.enabled = false;
-        this.controlsEnabled = false;
-        
-        // Parar qualquer animação atual
-        if (this.currentAnimation) {
-            this.currentAnimation.stop();
+        // Tocar som de morte
+        if (this.scene.parent && this.scene.parent.soundManager) {
+            this.scene.parent.soundManager.playSound('death');
         }
         
-        // Tocar animação de morte se disponível
-        if (this.animations['death']) {
-            this.playAnimation('death', true);
-        }
+        // Reset player position
+        this.mesh.position.set(this.startX, this.startY, 0);
         
-        // Desabilitar movimento
+        // Reset movement state
         this.velocity.set(0, 0, 0);
-        this.movementDirection.set(0, 0, 0);
+        this.isJumping = false;
+        this.isClimbing = false;
         
-        // Chamar game over com um pequeno delay para a animação de morte
-        if (this.game) {
-            setTimeout(() => {
-                this.game.gameOver();
-            }, 1000);
+        // Trigger game over or life loss
+        if (this.onPlayerDeath) {
+            this.onPlayerDeath();
         }
     }
 
@@ -1201,93 +1182,19 @@ export class Player {
         }
     }
 
-    // Método para boost de velocidade
-    applySpeedBoost(duration = 5000) {
-        console.log('Applying speed boost with 200% increase');
-        
-        // Guardar velocidade base se ainda não estiver definida
-        if (!this.baseSpeed) {
-            this.baseSpeed = this.moveSpeed;
-        }
-        
-        // Aumentar a velocidade em 200% (3x mais rápido)
-        this.moveSpeed = this.baseSpeed * 3;
-        
-        console.log('Speed increased from', this.baseSpeed, 'to', this.moveSpeed);
-        
-        // Limpar timer existente se houver
-        if (this.speedBoostTimer) {
-            clearTimeout(this.speedBoostTimer);
-        }
-        
-        // Criar novo timer
-        this.speedBoostTimer = setTimeout(() => {
-            console.log('Speed boost ended, resetting to', this.baseSpeed);
-            this.moveSpeed = this.baseSpeed;
-            this.speedBoostTimer = null;
-        }, duration);
-    }
-
-    // Método para boost de pulo
-    applyJumpBoost(duration = 8000) {
-        console.log('Applying jump boost');
-        // Aumentar a força do pulo em 25%
-        this.jumpForce = this.baseJumpForce * 1.25;
-        
-        // Limpar timer existente se houver
-        if (this.jumpBoostTimer) {
-            clearTimeout(this.jumpBoostTimer);
-        }
-        
-        // Criar novo timer
-        this.jumpBoostTimer = setTimeout(() => {
-            console.log('Jump boost ended');
-            this.jumpForce = this.baseJumpForce;
-            this.jumpBoostTimer = null;
-        }, duration);
-    }
-
-    // Método para invencibilidade
-    applyInvincibility(duration = 10000) { // 10 segundos
-        // Limpar timer existente se houver
-        if (this.invincibilityTimer) clearTimeout(this.invincibilityTimer);
-        
-        this.isInvincible = true;
-        
-        // Criar efeito visual de invencibilidade
-        if (this.mesh) {
-            this.mesh.traverse(child => {
-                if (child.isMesh) {
-                    child.material.emissive = new THREE.Color(0x00ff00);
-                    child.material.emissiveIntensity = 0.7;
-                }
-            });
-        }
-        
-        // Resetar após a duração
-        this.invincibilityTimer = setTimeout(() => {
-            this.isInvincible = false;
-            // Remover efeito visual
-            if (this.mesh) {
-                this.mesh.traverse(child => {
-                    if (child.isMesh) {
-                        child.material.emissive = new THREE.Color(0x000000);
-                        child.material.emissiveIntensity = 0;
-                    }
-                });
+    jump() {
+        if (!this.isJumping && this.canJump() && Date.now() - this.lastJumpTime > this.jumpCooldown * 1000) {
+            this.isJumping = true;
+            this.verticalSpeed = this.jumpForce;
+            this.lastJumpTime = Date.now();
+            
+            // Tocar som de pulo
+            if (this.scene.parent && this.scene.parent.soundManager) {
+                this.scene.parent.soundManager.playSound('jump');
             }
-        }, duration);
-    }
-
-    // Adicionar este método para garantir que o power-up seja aplicado
-    collect(type) {
-        switch(type) {
-            case 'powerup_speed':
-                this.applySpeedBoost(5000);
-                break;
-            case 'powerup_jump':
-                this.applyJumpBoost(8000);
-                break;
+            
+            // Animação de pulo
+            this.playAnimation('jump');
         }
     }
 } 
