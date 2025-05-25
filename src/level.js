@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { ItemManager } from './items.js';
 
 export class Level {
     constructor(scene) {
@@ -37,6 +38,7 @@ export class Level {
         this.chestBeatTime = 0;
         this.isBeatingChest = false;
         this.score = 0;
+        this.itemManager = null;
 
         // Define ladder positions as a class property - removida a escada do andar do DK (3)
         this.ladderPositions = [
@@ -59,6 +61,15 @@ export class Level {
         this.createBoundaries();
         this.createDonkeyKong();
         this.createSun();
+        // Inicializar e spawnar items
+        this.itemManager = new ItemManager(
+            this.scene,
+            this.floors,
+            this.floorHeight,
+            this.floorLength,
+            this.boundaryWidth
+        );
+        this.itemManager.spawnItems();
     }
 
     createEnvironment() {
@@ -776,6 +787,10 @@ export class Level {
             this.throwBarrel();
             this.nextBarrelThrowTime = this.game.time + this.barrelThrowInterval;
         }
+
+        if (this.itemManager) {
+            this.itemManager.update(deltaTime);
+        }
     }
 
     animateDonkeyKong(deltaTime) {
@@ -1277,5 +1292,9 @@ export class Level {
         // Adicionar o sol à cena
         this.scene.add(sunParent);
         this.sun = sunParent;
+    }
+
+    getItemManager() {
+        return this.itemManager;
     }
 } 

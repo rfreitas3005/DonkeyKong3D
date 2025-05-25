@@ -7,6 +7,7 @@ import Stats from 'three/examples/jsm/libs/stats.module';
 import { GameOverScreen } from './gameOverScreen.js';
 import { PauseMenu } from './pauseMenu.js';
 import { SoundManager } from './soundManager.js';
+import { ITEM_TYPES } from './items.js';
 
 export class Game {
     constructor() {
@@ -96,6 +97,15 @@ export class Game {
         // Add game over screen
         this.gameOverScreen = null;
         
+        this.activePowerups = {
+            speed: false,
+            invincible: false,
+        };
+        this.powerupTimers = {
+            speed: 0,
+            invincible: 0,
+        };
+
         this.init();
     }
 
@@ -286,7 +296,7 @@ export class Game {
     }
 
     onPlayerHit(source) {
-        if (source === 'barrel' && !this.mods.invincible) {
+        if (source === 'barrel' && !this.activePowerups.invincible) {
             console.log('Player hit by barrel, triggering death sequence');
             
             // Disable player controls immediately
@@ -778,6 +788,44 @@ export class Game {
                 this.level.update(deltaTime);
             }
             if (this.debugMenu) this.debugMenu.update();
+
+            // --- ITENS: checar colisão e aplicar efeitos ---
+            if (this.level && this.level.getItemManager && this.player && this.player.mesh) {
+                const itemManager = this.level.getItemManager();
+                if (itemManager) {
+                    const playerBox = this.player.collider;
+                    const hit = itemManager.getCollidingItem(playerBox);
+                    if (hit) {
+                        if (hit.type === ITEM_TYPES.COIN) {
+                            this.level.score += 100;
+                        } else if (hit.type === ITEM_TYPES.LIGHTNING) {
+                            this.activePowerups.speed = true;
+                            this.powerupTimers.speed = 5.0;
+                            this.applyPowerups();
+                        } else if (hit.type === ITEM_TYPES.STAR) {
+                            this.activePowerups.invincible = true;
+                            this.powerupTimers.invincible = 5.0;
+                            this.applyPowerups();
+                        }
+                        itemManager.removeItem(hit.mesh);
+                    }
+                }
+            }
+            // --- Atualizar timers dos poderes ---
+            if (this.activePowerups.speed) {
+                this.powerupTimers.speed -= deltaTime;
+                if (this.powerupTimers.speed <= 0) {
+                    this.activePowerups.speed = false;
+                    this.applyPowerups();
+                }
+            }
+            if (this.activePowerups.invincible) {
+                this.powerupTimers.invincible -= deltaTime;
+                if (this.powerupTimers.invincible <= 0) {
+                    this.activePowerups.invincible = false;
+                    this.applyPowerups();
+                }
+            }
         }
         
         // Sempre renderizar a cena, mesmo quando pausado
@@ -849,5 +897,15 @@ export class Game {
         if (this.soundManager) {
             this.soundManager.setVolume(volume);
         }
+    }
+
+    applyPowerups() {
+        // Speed boost
+        if (this.player) {
+            this.player.moveSpeed = this.activePowerups.speed ? 0.225 : 0.075;
+            this.player.jumpForce = this.activePowerups.speed ? 0.7 : 0.35;
+            this.player.climbSpeed = this.activePowerups.speed ? 0.12 : 0.04;
+        }
+        // Invencibilidade é checada em onPlayerHit
     }
 }
