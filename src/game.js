@@ -296,7 +296,7 @@ export class Game {
     }
 
     onPlayerHit(source) {
-        if (source === 'barrel' && !this.activePowerups.invincible) {
+        if (source === 'barrel' && !this.activePowerups.invincible && !this.mods.invincible) {
             console.log('Player hit by barrel, triggering death sequence');
             
             // Disable player controls immediately
