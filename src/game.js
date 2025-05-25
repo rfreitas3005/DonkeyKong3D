@@ -798,14 +798,18 @@ export class Game {
                     if (hit) {
                         if (hit.type === ITEM_TYPES.COIN) {
                             this.level.score += 100;
+                            this.level.updateScore();
+                            this.showFloatingText('+100', hit.mesh.position);
                         } else if (hit.type === ITEM_TYPES.LIGHTNING) {
                             this.activePowerups.speed = true;
                             this.powerupTimers.speed = 5.0;
                             this.applyPowerups();
+                            this.showPowerupMessage('SUPER BOOST!');
                         } else if (hit.type === ITEM_TYPES.STAR) {
                             this.activePowerups.invincible = true;
                             this.powerupTimers.invincible = 5.0;
                             this.applyPowerups();
+                            this.showPowerupMessage('INVENCÍVEL!');
                         }
                         itemManager.removeItem(hit.mesh);
                     }
@@ -908,4 +912,63 @@ export class Game {
         }
         // Invencibilidade é checada em onPlayerHit
     }
+    showFloatingText(text, position) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        div.style.position = 'absolute';
+        div.style.color = '#FFD700';
+        div.style.fontSize = '20px';
+        div.style.fontWeight = 'bold';
+        div.style.pointerEvents = 'none';
+        div.style.zIndex = 1000;
+        div.style.textShadow = '0 0 5px black';
+    
+        document.body.appendChild(div);
+    
+        const coords = position.clone().project(this.camera);
+        const x = (coords.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-coords.y * 0.5 + 0.5) * window.innerHeight;
+    
+        div.style.left = `${x}px`;
+        div.style.top = `${y}px`;
+        div.style.opacity = '1';
+        div.style.transition = 'all 0.7s ease-out';
+    
+        setTimeout(() => {
+            div.style.transform = 'translateY(-40px)';
+            div.style.opacity = '0';
+        }, 50);
+    
+        setTimeout(() => {
+            div.remove();
+        }, 800);
+    }
+    showPowerupMessage(message) {
+        const div = document.createElement('div');
+        div.textContent = message;
+        div.style.position = 'fixed';
+        div.style.top = '20%';
+        div.style.left = '50%';
+        div.style.transform = 'translateX(-50%)';
+        div.style.color = '#00ffff';
+        div.style.fontSize = '28px';
+        div.style.fontWeight = 'bold';
+        div.style.textShadow = '0 0 10px #000';
+        div.style.zIndex = '1000';
+        div.style.opacity = '1';
+        div.style.transition = 'all 0.7s ease-out';
+    
+        document.body.appendChild(div);
+    
+        setTimeout(() => {
+            div.style.transform = 'translateX(-50%) translateY(-40px)';
+            div.style.opacity = '0';
+        }, 100);
+    
+        setTimeout(() => {
+            div.remove();
+        }, 1000);
+    }
+    
+    
 }
