@@ -379,11 +379,12 @@ export class GameMenu {
                     <h2>Agradecimentos Especiais</h2>
                     <p>Professor Miguel Ângelo Correia de Melo</p>
                     <p>Professor Maximino Esteves Correia Bessa</p>
-                    <p>Bruno Miguel Eira Peixoto</p>
+                    <p>Professor Bruno Miguel Eira Peixoto</p>
                     <br><br>
                     <h2>Comunidades</h2>
                     <p>YouTube</p>
                     <p>Reddit</p>
+                    <p>Git Hub</p>
                     <br><br>
                     <h2>Inspiração</h2>
                     <p>Donkey Kong (1981), da Nintendo</p>
