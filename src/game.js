@@ -787,9 +787,9 @@ export class Game {
             this.time += deltaTime;
             
             // Update game components
-            if (this.player && this.player.enabled) {
-                this.player.update(deltaTime);
-            }
+            if (this.player) {
+                this.player.update(deltaTime); // mesmo desativado, precisa de atualizar o mixer
+            }            
             if (this.level) {
                 this.level.update(deltaTime);
             }
