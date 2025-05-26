@@ -83,7 +83,13 @@ export class GameMenu {
         // Create hi-score display
         const hiScore = document.createElement('div');
         hiScore.className = 'hi-score';
-        hiScore.innerHTML = 'HI-SCORE: 300';
+        const savedHiScore = localStorage.getItem('highScore') || 0;
+        hiScore.innerHTML = `HI-SCORE: ${savedHiScore}`;
+
+        const lastScore = localStorage.getItem('lastScore') || 0;
+        const scoreDisplay = document.createElement('div');
+        scoreDisplay.className = 'last-score';
+        scoreDisplay.innerHTML = `SCORE: ${lastScore}`;
 
         // Create title
         const title = document.createElement('div');
@@ -128,6 +134,7 @@ export class GameMenu {
         menuContent.appendChild(menuItemsContainer);
         menuContent.appendChild(pressEnter);
         this.menuContainer.appendChild(hiScore);
+        this.menuContainer.appendChild(scoreDisplay);
         this.menuContainer.appendChild(menuContent);
         document.body.appendChild(this.menuContainer);
 
@@ -236,13 +243,29 @@ export class GameMenu {
             document.exitPointerLock();
         }
         if (this.menuContainer) {
+            // Atualizar valores dinâmicos
+            const hiScoreElement = this.menuContainer.querySelector('.hi-score');
+            const lastScoreElement = this.menuContainer.querySelector('.last-score');
+            
+            if (hiScoreElement) {
+                const savedHiScore = localStorage.getItem('highScore') || 0;
+                hiScoreElement.innerHTML = `HI-SCORE: ${savedHiScore}`;
+            }
+            
+            if (lastScoreElement) {
+                const lastScore = localStorage.getItem('lastScore') || 0;
+                lastScoreElement.innerHTML = `SCORE: ${lastScore}`;
+            }
+        
             this.menuContainer.style.display = 'flex';
             this.isVisible = true;
             this.isPauseVisible = false;
+            
             if (this.pauseMenu) {
                 this.pauseMenu.style.display = 'none';
             }
         }
+        
         this.setupEventListeners();
     }
 

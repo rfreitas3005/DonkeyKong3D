@@ -98,6 +98,17 @@
     letter-spacing: 1px;
 }
 
+.last-score {
+    color: #fff;
+    font-size: 18px;
+    text-align: center;
+    margin-top: 8px;
+    font-family: 'Press Start 2P', monospace;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+
+
 .hitbox-info {
     position: fixed;
     top: 20px;

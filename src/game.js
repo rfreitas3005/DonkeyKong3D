@@ -328,7 +328,13 @@ export class Game {
                     console.log('Creating new game over screen...');
                     this.gameOverScreen = new GameOverScreen(this);
                 }
-                this.gameOverScreen.show();
+                const currentScore = this.level.score;
+                const savedHighScore = parseInt(localStorage.getItem('highScore') || '0', 10);
+                if (currentScore > savedHighScore) {
+                    localStorage.setItem('highScore', currentScore);
+                }
+                localStorage.setItem('lastScore', currentScore);
+                this.gameOverScreen.show(currentScore, Math.max(currentScore, savedHighScore));
                 this.isRunning = false;
             }, 1300); // Wait for 1.3 seconds before showing game over
         }
@@ -799,6 +805,7 @@ export class Game {
                         if (hit.type === ITEM_TYPES.COIN) {
                             this.level.score += 100;
                             this.level.updateScore();
+                            localStorage.setItem('lastScore', this.level.score); 
                             this.showFloatingText('+100', hit.mesh.position);
                         } else if (hit.type === ITEM_TYPES.LIGHTNING) {
                             this.activePowerups.speed = true;

@@ -144,9 +144,8 @@ export class GameOverScreen {
     }
 
     show(finalScore = 0, highScore = 0) {
-        // Update scores
-        const finalScoreElement = document.getElementById('final-score');
-        const highScoreElement = document.getElementById('high-score');
+        const finalScoreElement = this.container.querySelector('#final-score');
+        const highScoreElement = this.container.querySelector('#high-score');
         
         if (finalScoreElement) {
             finalScoreElement.textContent = `FINAL SCORE: ${finalScore}`;
@@ -155,17 +154,15 @@ export class GameOverScreen {
             highScoreElement.textContent = `HI-SCORE: ${highScore}`;
         }
         
-        // Show container with fade effect
         this.container.style.display = 'flex';
         requestAnimationFrame(() => {
             this.container.style.opacity = '1';
         });
         
-        // Set initial selection
         this.currentSelection = 0;
         this.updateSelection();
     }
-
+    
     hide() {
         this.container.style.opacity = '0';
         setTimeout(() => {
