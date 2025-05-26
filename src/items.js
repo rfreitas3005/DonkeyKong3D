@@ -23,7 +23,9 @@ function createCoin() {
     return mesh;
 }
 
+
 function createLightning() {
+    // Relâmpago: raio amarelo estilizado (placeholder: ziguezague)
     const shape = new THREE.Shape();
     shape.moveTo(0, 0);
     shape.lineTo(0.2, 0.4);
@@ -39,16 +41,11 @@ function createLightning() {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.type = ITEM_TYPES.LIGHTNING;
-
-    // Luz tipo aura
-    const light = new THREE.PointLight(0xffff33, 2, 6);
-    light.userData.pulsate = true;
-    mesh.add(light);
-
     return mesh;
 }
 
 function createStar() {
+    // Estrela: 5 pontas (placeholder)
     const shape = new THREE.Shape();
     const spikes = 5, outerRadius = 0.6, innerRadius = 0.25;
     for (let i = 0; i < spikes * 2; i++) {
@@ -59,22 +56,11 @@ function createStar() {
     shape.closePath();
     const extrudeSettings = { depth: 0.15, bevelEnabled: false };
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    const material = new THREE.MeshPhongMaterial({
-        color: 0xFFD700,
-        shininess: 120,
-        emissive: 0xFFFF00,
-        emissiveIntensity: 0.6
-    });
+    const material = new THREE.MeshPhongMaterial({ color: 0xFFD700, shininess: 120, emissive: 0xFFFF00, emissiveIntensity: 0.5 });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.type = ITEM_TYPES.STAR;
-
-    // Luz tipo aura
-    const light = new THREE.PointLight(0xffffff, 2.5, 7);
-    light.userData.pulsate = true;
-    mesh.add(light);
-
     return mesh;
 }
 
@@ -102,10 +88,11 @@ export class ItemManager {
     }
 
     spawnItems() {
+        // Limpar items antigos
         this.items.forEach(item => this.scene.remove(item.mesh));
         this.items = [];
-
         for (let floor = 0; floor < this.floors.length; floor++) {
+            // Moedas: várias por andar
             const numCoins = 6 + Math.floor(Math.random() * 4);
             for (let i = 0; i < numCoins; i++) {
                 const mesh = createItem(ITEM_TYPES.COIN);
@@ -117,7 +104,7 @@ export class ItemManager {
                 this.scene.add(mesh);
                 this.items.push({ mesh, type: ITEM_TYPES.COIN, floor });
             }
-
+            // Relâmpago: 0-1 por andar
             if (Math.random() < 0.5) {
                 const mesh = createItem(ITEM_TYPES.LIGHTNING);
                 mesh.position.set(
@@ -128,7 +115,7 @@ export class ItemManager {
                 this.scene.add(mesh);
                 this.items.push({ mesh, type: ITEM_TYPES.LIGHTNING, floor });
             }
-
+            // Estrela: 0-1 por andar
             if (Math.random() < 0.4) {
                 const mesh = createItem(ITEM_TYPES.STAR);
                 mesh.position.set(
@@ -143,26 +130,18 @@ export class ItemManager {
     }
 
     update(deltaTime) {
+        // Flutuação e rotação
         const t = performance.now() * 0.001;
-
         this.items.forEach(({ mesh, type, floor }) => {
             const floorY = floor * this.floorHeight;
             const baseY = type === ITEM_TYPES.COIN ? floorY + 2.2 : floorY + 2.5;
             mesh.position.y = baseY + Math.sin(t * 2 + mesh.position.x + mesh.position.z) * 0.1;
-
-            if (type === ITEM_TYPES.COIN) {
-                mesh.rotation.y += 0.05;
-            } else {
+            mesh.rotation.y += 0.03;
+            if (type === ITEM_TYPES.LIGHTNING || type === ITEM_TYPES.STAR) {
                 mesh.rotation.z = Math.sin(t * 2) * 0.2;
             }
-
-            // Anima a luz se existir
-            mesh.children.forEach(child => {
-                if (child.isPointLight && child.userData.pulsate) {
-                    child.intensity = 1.5 + 0.5 * Math.sin(t * 4);
-                }
-            });
         });
+        
     }
 
     removeItem(mesh) {
@@ -174,18 +153,20 @@ export class ItemManager {
         for (const { mesh, type } of this.items) {
             const center = mesh.position.clone();
             const size = new THREE.Vector3();
-
+    
             if (type === ITEM_TYPES.COIN) {
-                size.set(0.8, 0.8, 0.8);
-            } else {
+                size.set(0.8, 0.8, 0.8); // bounding box mais larga na horizontal
+            } else if (type === ITEM_TYPES.LIGHTNING || type === ITEM_TYPES.STAR) {
                 size.set(1.0, 1.2, 1.0);
             }
-
+    
             const itemBox = new THREE.Box3().setFromCenterAndSize(center, size);
+    
             if (playerBox.intersectsBox(itemBox)) {
                 return { mesh, type };
             }
         }
         return null;
     }
-}
+    
+} 
