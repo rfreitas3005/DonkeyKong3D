@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { ItemManager } from './items.js';
 
 export class Level {
     constructor(scene) {
@@ -7,6 +10,8 @@ export class Level {
         // Estas propriedades serão inicializadas pelo Game posteriormente
         this.game = null;
         this.player = null;
+        this.donkeyKongModel = null;
+        this.modelLoader = new GLTFLoader();
         
         // Inicializações de propriedades
         this.floors = [];
@@ -14,9 +19,11 @@ export class Level {
         this.stairs = [];
         this.barrels = [];
         this.barrelSpawnTimer = 0;
-        this.barrelSpawnInterval = 2000; // 2 seconds between spawns
+        this.barrelSpawnInterval = 1000; // Reduzido para 1 segundo (era 2000)
+        this.minSpawnInterval = 800; // Intervalo mínimo entre barris
+        this.maxSpawnInterval = 1500; // Intervalo máximo entre barris
         this.laneWidth = 6;
-        this.floorHeight = 16;
+        this.floorHeight = 50; // Aumentado de 16 para 50
         this.numFloors = 4;
         this.floorLength = 200;
         this.boundaryWidth = 40;
@@ -31,6 +38,7 @@ export class Level {
         this.chestBeatTime = 0;
         this.isBeatingChest = false;
         this.score = 0;
+        this.itemManager = null;
 
         // Define ladder positions as a class property - removida a escada do andar do DK (3)
         this.ladderPositions = [
@@ -52,22 +60,34 @@ export class Level {
         this.createStairs();
         this.createBoundaries();
         this.createDonkeyKong();
+        this.createSun();
+        // Inicializar e spawnar items
+        this.itemManager = new ItemManager(
+            this.scene,
+            this.floors,
+            this.floorHeight,
+            this.floorLength,
+            this.boundaryWidth
+        );
+        this.itemManager.spawnItems();
     }
 
     createEnvironment() {
         // Cor de fundo totalmente preta como no arcade original
         this.scene.background = new THREE.Color(0x000000);
         
-        // Create ground
+        // Create ground with shadows
         const groundGeometry = new THREE.PlaneGeometry(400, this.floorLength * 2);
         const groundMaterial = new THREE.MeshPhongMaterial({
             color: 0x000000, // Fundo preto
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            shadowSide: THREE.FrontSide
         });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.position.y = 0;
         ground.position.z = this.floorLength / 2;
+        ground.receiveShadow = true;
         this.scene.add(ground);
     }
 
@@ -130,78 +150,70 @@ export class Level {
     }
 
     createFloors() {
-        // Cor do piso mais próxima do Donkey Kong original
-        const floorPinkColor = 0xE80053; // Rosa/vermelho mais próximo do original
-        
-        for (let floor = 0; floor < this.numFloors; floor++) {
-            // Criar plataforma principal mais alta
-            const floorGeometry = new THREE.BoxGeometry(this.boundaryWidth, 2, this.floorLength);
-            
-            // Material para o piso com cor rosa/vermelho do Donkey Kong original
-            const floorMaterial = new THREE.MeshPhongMaterial({ 
-                color: floorPinkColor,
-                metalness: 0.1,
-                roughness: 0.8,
-                shininess: 30
-            });
-            
-            const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
-            
-            // Posição ajustada para evitar que o personagem flutue
-            floorMesh.position.set(
-                0,
-                floor * this.floorHeight,
-                this.floorLength / 2
-            );
-            
-            this.floors.push(floorMesh);
-            this.scene.add(floorMesh);
+        // Materiais reutilizáveis
+        const floorMaterial = new THREE.MeshPhongMaterial({
+            color: 0xBC0045,
+            metalness: 0.2,
+            roughness: 0.8,
+            shadowSide: THREE.FrontSide
+        });
 
-            // Alternância de direção para cada andar (como no jogo original)
-            const isRightToLeft = floor % 2 === 1;
+        const beamMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xBC0045,
+            shadowSide: THREE.FrontSide
+        });
+
+        const sideDetailMaterial = new THREE.MeshPhongMaterial({
+            color: 0xBC0045,
+            metalness: 0.1,
+            roughness: 0.8
+        });
+
+        // Geometrias reutilizáveis
+        const floorGeometry = new THREE.BoxGeometry(this.boundaryWidth, 2, this.floorLength);
+        const beamGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.3, 0.7);
+        const sideDetailGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.5, this.floorLength);
+
+        for (let floor = 0; floor < this.numFloors; floor++) {
+            // Criar objeto pai para cada andar
+            const floorParent = new THREE.Object3D();
+            floorParent.position.set(0, floor * this.floorHeight, this.floorLength / 2);
             
-            // Adicionar linhas horizontais no estilo Donkey Kong original
-            // (mais espaçadas para o visual "girder")
+            // Criar a plataforma principal como filho
+            const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
+            floorMesh.castShadow = true;
+            floorMesh.receiveShadow = true;
+            floorParent.add(floorMesh);
+            this.floors.push(floorMesh);
+
+            // Adicionar vigas como filhos
             const numBeams = Math.floor(this.floorLength / 7);
             for (let i = 0; i < numBeams; i++) {
-                const beamGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.3, 0.7);
-                const beamMaterial = new THREE.MeshPhongMaterial({ 
-                    color: 0xBC0045, // Vermelho mais escuro para as linhas
-                });
                 const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-                
-                beam.position.set(
-                    0,
-                    floor * this.floorHeight + 1.1, // Acima do piso
-                    i * 7 + 3.5 // Distribuição uniforme ao longo do comprimento
-                );
-                
-                this.scene.add(beam);
+                beam.position.set(0, 1.1, -this.floorLength/2 + i * 7 + 3.5);
+                beam.castShadow = true;
+                beam.receiveShadow = true;
+                floorParent.add(beam);
             }
             
-            // Adicionar detalhes laterais para cada piso
-            const sideDetailGeometry = new THREE.BoxGeometry(this.boundaryWidth, 0.5, this.floorLength);
-            const sideDetailMaterial = new THREE.MeshPhongMaterial({
-                color: 0xBC0045, // Vermelho mais escuro
-                metalness: 0.1,
-                roughness: 0.8
+            // Adicionar detalhes laterais como filhos
+            const sideDetail = new THREE.Mesh(sideDetailGeometry, sideDetailMaterial);
+            sideDetail.position.set(0, -0.75, 0);
+            sideDetail.castShadow = true;
+            sideDetail.receiveShadow = true;
+            floorParent.add(sideDetail);
+
+            // Configurar sombras para toda a estrutura
+            floorParent.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
             });
-            
-            // Detalhe inferior
-            const lowerDetail = new THREE.Mesh(sideDetailGeometry, sideDetailMaterial);
-            lowerDetail.position.set(
-                0,
-                floor * this.floorHeight - 0.7,
-                this.floorLength / 2
-            );
-            this.scene.add(lowerDetail);
-            
-            // Adicionar setas direcionais no chão para indicar o fluxo (como no jogo original)
-            this.addDirectionalMarkers(floor, isRightToLeft);
+
+            // Adicionar o objeto pai completo à cena
+            this.scene.add(floorParent);
         }
-        
-        // Adicionar paredes laterais visíveis
-        this.createWalls();
     }
 
     // Novo método para adicionar indicadores de direção no chão
@@ -310,289 +322,159 @@ export class Level {
         // Cores das escadas no estilo Donkey Kong original
         const ladderSideColor = 0x29ADFF; // Azul claro/médio para as laterais
         const ladderRungColor = 0x29ADFF; // Mesma cor para os degraus
-        
+
         // Use as posições de escada definidas no construtor
         this.ladderPositions.forEach(position => {
             const floorY = position.floor * this.floorHeight;
             const ladderHeight = this.floorHeight;
             
-            // Criar as laterais da escada
+            // Criar o objeto pai da escada
+            const ladderParent = new THREE.Object3D();
+            ladderParent.position.set(0, floorY, position.z);
+            
+            // Criar as laterais da escada como filhos do objeto pai
             for (let side = -1; side <= 1; side += 2) {
                 const sideGeometry = new THREE.BoxGeometry(0.15, ladderHeight, ladderDepth);
                 const sideMaterial = new THREE.MeshPhongMaterial({ 
                     color: ladderSideColor,
-                    emissive: 0x003366, // Brilho azul profundo
+                    emissive: 0x003366,
                     emissiveIntensity: 0.2
                 });
                 const sideMesh = new THREE.Mesh(sideGeometry, sideMaterial);
-                
-                sideMesh.position.set(
-                    side * (ladderWidth / 2),
-                    floorY + ladderHeight / 2,
-                    position.z
-                );
-                
-                this.scene.add(sideMesh);
+                sideMesh.position.set(side * (ladderWidth / 2), ladderHeight / 2, 0);
+                ladderParent.add(sideMesh);
             }
             
-            // Criar os degraus da escada
+            // Criar os degraus como filhos do objeto pai
             const numRungs = Math.floor(ladderHeight / rungSpacing);
             for (let i = 0; i < numRungs; i++) {
                 const rungGeometry = new THREE.BoxGeometry(ladderWidth, 0.15, ladderDepth);
                 const rungMaterial = new THREE.MeshPhongMaterial({ 
                     color: ladderRungColor,
-                    emissive: 0x003366, // Brilho azul profundo
+                    emissive: 0x003366,
                     emissiveIntensity: 0.2
                 });
                 const rungMesh = new THREE.Mesh(rungGeometry, rungMaterial);
-                
-                rungMesh.position.set(
-                    0,
-                    floorY + (i * rungSpacing) + (rungSpacing / 2),
-                    position.z
-                );
-                
-                this.scene.add(rungMesh);
+                rungMesh.position.set(0, (i * rungSpacing) + (rungSpacing / 2), 0);
+                ladderParent.add(rungMesh);
             }
             
-            // Adicionar hitbox para detecção de colisão
-            const hitboxGeometry = new THREE.BoxGeometry(ladderWidth, ladderHeight, 1);
+            // Criar hitbox para detecção de colisão
+            const hitboxGeometry = new THREE.BoxGeometry(ladderWidth, ladderHeight, 2); // Aumentei a profundidade para 2
             const hitboxMaterial = new THREE.MeshBasicMaterial({
                 transparent: true,
                 opacity: 0.0
             });
             
             const hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
-            hitbox.position.set(
-                0,
-                floorY + ladderHeight / 2,
-                position.z
-            );
+            hitbox.position.set(0, ladderHeight / 2, 0);
             
-            hitbox.userData.isLadder = true;
-            hitbox.userData.floorIndex = position.floor;
+            // Configurar propriedades importantes para a hitbox
+            hitbox.userData = {
+                isLadder: true,
+                floorIndex: position.floor,
+                type: 'ladder',
+                ladderParent: ladderParent
+            };
             
+            // Adicionar a hitbox ao objeto pai
+            ladderParent.add(hitbox);
+            
+            // Importante: Adicionar a hitbox à lista de escadas E à cena
             this.stairs.push(hitbox);
-            this.scene.add(hitbox);
+            this.scene.add(hitbox); // Adicionar hitbox diretamente à cena
+            
+            // Ajustar posição global da hitbox
+            hitbox.position.copy(ladderParent.position);
+            hitbox.position.y += ladderHeight / 2;
+            
+            // Configurar sombras para toda a estrutura
+            ladderParent.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            
+            // Adicionar o objeto pai completo à cena
+            this.scene.add(ladderParent);
         });
     }
 
-    createDonkeyKong() {
-        // Create elevated platform for Donkey Kong with collision
-        const platformGeometry = new THREE.BoxGeometry(14, 1.5, 12);
-        const platformMaterial = new THREE.MeshPhongMaterial({
-            color: 0x8B4513,
-            metalness: 0.2,
-            roughness: 0.8
-        });
-        this.donkeyKongPlatform = new THREE.Mesh(platformGeometry, platformMaterial);
-        
-        // Position platform above the top floor
-        const topFloorY = (this.numFloors - 1) * this.floorHeight;
-        this.donkeyKongPlatform.position.set(
-            0,
-            topFloorY + 0.75,
-            this.floorLength * 0.85
-        );
-        
-        // Add collision properties
-        this.donkeyKongPlatform.userData.isBoundary = true;
-        this.scene.add(this.donkeyKongPlatform);
+    async loadDonkeyKongModel() {
+        try {
+            console.log('Carregando modelo do Donkey Kong...');
+            const gltf = await this.modelLoader.loadAsync('./models/donkeykong.glb');
+            
+            this.donkeyKongModel = gltf.scene;
+            
+            // Making DK much larger now
+            this.donkeyKongModel.scale.set(1.2, 1.2, 1.2);
+            
+            // Configurar sombras e materiais para todos os meshes do modelo
+            this.donkeyKongModel.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    
+                    if (child.material) {
+                        child.material.needsUpdate = true;
+                        child.material.shadowSide = THREE.FrontSide;
+                    }
+                }
+                // Guardar referências aos ossos importantes se existirem
+                if (child.isBone) {
+                    console.log('Found bone:', child.name);
+                }
+            });
 
-        // Criar um Donkey Kong mais parecido com a referência
-        const body = new THREE.Group();
-        
-        // Cores mais precisas baseadas na imagem de referência
-        const dkBrownColor = 0x8B5A2B; // Marrom principal do corpo
-        const dkLightBrownColor = 0xD2B48C; // Cor clara para o focinho
-        const dkRedColor = 0xFF0000; // Vermelho da gravata
-        const dkYellowColor = 0xFFD700; // Amarelo do logo "DK"
-        
-        // Torso com formato mais arredondado
-        const torsoGeometry = new THREE.SphereGeometry(3, 24, 18);
-        torsoGeometry.scale(1.3, 1, 0.9); // Mais largo e menos profundo
-        const torsoMaterial = new THREE.MeshPhongMaterial({ 
-            color: dkBrownColor,
-            shininess: 5
-        });
-        const torso = new THREE.Mesh(torsoGeometry, torsoMaterial);
-        torso.position.y = 0;
-        torso.position.z = 0;
-        torso.name = 'body';
-        body.add(torso);
-        
-        // Cabeça grande
-        const headGeometry = new THREE.SphereGeometry(2.8, 24, 20);
-        headGeometry.scale(1.2, 0.9, 0.8); // Ajustando proporções
-        const headMaterial = new THREE.MeshPhongMaterial({ 
-            color: dkBrownColor,
-            shininess: 5
-        });
-        const head = new THREE.Mesh(headGeometry, headMaterial);
-        head.position.y = 4.5;
-        head.position.z = 0.5;
-        head.name = 'head';
-        body.add(head);
-        
-        // Focinho grande e mais protuberante
-        const snoutGeometry = new THREE.SphereGeometry(2.5, 20, 16);
-        snoutGeometry.scale(1, 0.7, 0.6);
-        const snoutMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
-        const snout = new THREE.Mesh(snoutGeometry, snoutMaterial);
-        snout.position.set(0, 4, 2);
-        body.add(snout);
-        
-        // Boca
-        const mouthGeometry = new THREE.SphereGeometry(1.8, 20, 10);
-        mouthGeometry.scale(1, 0.4, 0.1);
-        const mouthMaterial = new THREE.MeshPhongMaterial({ 
-            color: 0x000000,
-            shininess: 10
-        });
-        const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
-        mouth.position.set(0, 3, 3);
-        body.add(mouth);
-        
-        // Olhos grandes e mais expressivos
-        for (let side = -1; side <= 1; side += 2) {
-            if (side === 0) continue;
+            // Posicionar o DK no topo do nível
+            const topFloorY = (this.numFloors - 1) * this.floorHeight;
+            this.donkeyKongModel.position.set(
+                0,                           // Centro X
+                topFloorY + 4.8,              // Altura ajustada - moved much higher
+                this.floorLength * 0.85     // Posição Z mantida
+            );
             
-            // Branco do olho
-            const eyeGeometry = new THREE.SphereGeometry(0.8, 20, 20);
-            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
-            const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            eye.position.set(side * 1.5, 5, 2);
-            body.add(eye);
-            
-            // Pupila
-            const pupilGeometry = new THREE.SphereGeometry(0.4, 12, 12);
-            const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-            const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-            pupil.position.set(side * 1.5, 5, 2.5);
-            body.add(pupil);
-            
-            // Sobrancelha
-            const browGeometry = new THREE.BoxGeometry(1, 0.3, 0.2);
-            const browMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const brow = new THREE.Mesh(browGeometry, browMaterial);
-            brow.position.set(side * 1.5, 5.7, 2.2);
-            brow.rotation.x = Math.PI * 0.1;
-            body.add(brow);
-            
-            // Orelha
-            const earGeometry = new THREE.SphereGeometry(0.8, 16, 16);
-            earGeometry.scale(0.5, 1, 0.3);
-            const earMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const ear = new THREE.Mesh(earGeometry, earMaterial);
-            ear.position.set(side * 2.2, 6, 0);
-            body.add(ear);
+            // Rotação básica
+            this.donkeyKongModel.rotation.set(0, Math.PI, 0);
+
+            // Criar o mixer de animação
+            this.dkMixer = new THREE.AnimationMixer(this.donkeyKongModel);
+
+            // Adicionar direto à cena sem tentar carregar a animação
+            this.scene.add(this.donkeyKongModel);
+            console.log('Modelo do Donkey Kong carregado com sucesso');
+
+            // Atualizar a referência principal do DK
+            this.donkeyKong = this.donkeyKongModel;
+
+        } catch (error) {
+            console.error('Erro ao carregar o modelo do Donkey Kong:', error);
+            this.createPlaceholderDK();
         }
+    }
+
+    createPlaceholderDK() {
+        // Criar um placeholder simples caso o modelo falhe ao carregar
+        const geometry = new THREE.BoxGeometry(2, 3, 1);
+        const material = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+        const placeholder = new THREE.Mesh(geometry, material);
         
-        // Gravata vermelha com logo DK
-        const tieGeometry = new THREE.BoxGeometry(1.2, 3.5, 0.3);
-        const tieMaterial = new THREE.MeshPhongMaterial({
-            color: dkRedColor,
-            shininess: 30
-        });
-        const tie = new THREE.Mesh(tieGeometry, tieMaterial);
-        tie.position.set(0, 1.5, 2.9);
-        tie.rotation.x = Math.PI * 0.15;
-        body.add(tie);
-        
-        // Logo DK na gravata
-        const logoGeometry = new THREE.BoxGeometry(0.9, 1, 0.35);
-        const logoMaterial = new THREE.MeshPhongMaterial({
-            color: dkYellowColor,
-            shininess: 50
-        });
-        const logo = new THREE.Mesh(logoGeometry, logoMaterial);
-        logo.position.set(0, 0.5, 3.1);
-        logo.rotation.x = Math.PI * 0.15;
-        body.add(logo);
-        
-        // Braços mais pesados
-        for (let side = -1; side <= 1; side += 2) {
-            if (side === 0) continue;
-            
-            // Grupo para o braço inteiro para poder animar
-            const armGroup = new THREE.Group();
-            armGroup.name = side === -1 ? 'leftArm' : 'rightArm';
-            
-            // Ombro
-            const shoulderGeometry = new THREE.SphereGeometry(1.5, 16, 16);
-            const shoulderMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const shoulder = new THREE.Mesh(shoulderGeometry, shoulderMaterial);
-            armGroup.add(shoulder);
-            
-            // Braço
-            const armGeometry = new THREE.CylinderGeometry(1.2, 1.4, 4, 12);
-            const armMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const arm = new THREE.Mesh(armGeometry, armMaterial);
-            arm.position.y = -2.5;
-            arm.rotation.z = side * 0.2;
-            armGroup.add(arm);
-            
-            // Mão grande
-            const handGeometry = new THREE.SphereGeometry(1.8, 16, 16);
-            handGeometry.scale(1.2, 0.8, 0.8);
-            const handMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
-            const hand = new THREE.Mesh(handGeometry, handMaterial);
-            hand.position.set(side * 0.8, -5, 0);
-            armGroup.add(hand);
-            
-            // Posicionar o grupo do braço
-            armGroup.position.set(side * 3.5, 2, 0);
-            body.add(armGroup);
-        }
-        
-        // Pernas curtas e fortes
-        for (let side = -1; side <= 1; side += 2) {
-            if (side === 0) continue;
-            
-            // Grupo para a perna inteira
-            const legGroup = new THREE.Group();
-            legGroup.name = side === -1 ? 'leftLeg' : 'rightLeg';
-            
-            // Coxa
-            const thighGeometry = new THREE.CylinderGeometry(1.2, 1.1, 2.5, 12);
-            const thighMaterial = new THREE.MeshPhongMaterial({ color: dkBrownColor });
-            const thigh = new THREE.Mesh(thighGeometry, thighMaterial);
-            thigh.position.y = -1;
-            legGroup.add(thigh);
-            
-            // Pé
-            const footGeometry = new THREE.BoxGeometry(2, 1, 3);
-            const footMaterial = new THREE.MeshPhongMaterial({ color: dkLightBrownColor });
-            const foot = new THREE.Mesh(footGeometry, footMaterial);
-            foot.position.set(0, -2.5, 0.8);
-            legGroup.add(foot);
-            
-            // Posicionar o grupo da perna
-            legGroup.position.set(side * 2, -2.5, 0);
-            body.add(legGroup);
-        }
-        
-        // Posicionar o Donkey Kong completo
-        body.position.set(
+        const topFloorY = (this.numFloors - 1) * this.floorHeight;
+        placeholder.position.set(
             0,
             topFloorY + 4.5,
             this.floorLength * 0.85
         );
         
-        // Virar para frente
-        body.rotation.y = Math.PI;
+        this.donkeyKongModel = placeholder;
+        this.scene.add(placeholder);
+    }
 
-        this.donkeyKong = body;
-        this.scene.add(this.donkeyKong);
-
-        // Initialize throwing state
-        this.isThrowingBarrel = false;
-        this.throwAnimationTime = 0;
-
-        // Adicionar temporizador para arremessar barris
-        this.barrelThrowInterval = 5; // segundos entre arremessos
-        this.nextBarrelThrowTime = 0; // Inicializado com 0, será atualizado no primeiro update
-        this.barrels = []; // array para armazenar os barris
+    async createDonkeyKong() {
+        // Remove platform creation code and just load DK
+        await this.loadDonkeyKongModel();
     }
 
     createPlatform(x, y, z, width, height, depth, color = 0x808080) {
@@ -638,11 +520,19 @@ export class Level {
         ladder.position.set(x, y, z);
         ladder.userData.isLadder = true;
         ladder.userData.floorIndex = floorIndex;
+        
+        // Configurar sombras para as escadas
+        ladder.castShadow = true;
+        ladder.receiveShadow = true;
+        
         this.scene.add(ladder);
         return ladder;
     }
 
     createBarrel() {
+        // Criar o objeto pai do barril
+        const barrelParent = new THREE.Object3D();
+        
         // Barril mais parecido com o jogo original - cilindro redondo com aros
         const segments = 24;
         const radiusTop = 1.2;
@@ -674,45 +564,16 @@ export class Level {
         
         // Material de madeira
         const material = new THREE.MeshPhongMaterial({ 
-            color: 0xA05010,  // Marrom mais terroso para o barril
+            color: 0xA05010,
             specular: 0x222222,
             shininess: 15
         });
 
-        const barrel = new THREE.Mesh(geometry, material);
+        const barrelMesh = new THREE.Mesh(geometry, material);
+        barrelMesh.rotation.z = Math.PI / 2;
+        barrelParent.add(barrelMesh);
 
-        // Position barrel at the stairs on the top floor
-        const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
-        const spawnZ = this.floorLength * 0.15;
-        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 5);
-        barrel.position.set(spawnX, spawnY, spawnZ);
-
-        // Add properties for movement
-        barrel.userData.floor = this.numFloors - 1;
-        barrel.userData.speed = 70; // Velocidade mantida alta para gameplay
-        barrel.userData.rotationSpeed = 8;
-        barrel.userData.movingToBack = true;
-        barrel.userData.verticalSpeed = 0;
-        
-        // Ensure barrel renders in front of other objects
-        barrel.renderOrder = 2;
-        barrel.material.depthTest = true;
-        barrel.material.transparent = false;
-
-        // Initial rotation to lay barrel on its side
-        barrel.rotation.z = Math.PI / 2;
-        
-        // Adicionar detalhes visuais ao barril
-        this.addBarrelDetails(barrel);
-
-        // Add to scene and tracking array
-        this.scene.add(barrel);
-        this.barrels.push(barrel);
-    }
-
-    // Novo método para adicionar detalhes visuais aos barris
-    addBarrelDetails(barrel) {
-        // Adicionar detalhes visuais ao barril - aros metálicos mais nítidos
+        // Adicionar aros metálicos ao barril
         const ringGeometry = new THREE.TorusGeometry(1.25, 0.1, 8, 24);
         const ringMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x555555,
@@ -721,15 +582,48 @@ export class Level {
         });
         
         // Criar aros metálicos em posições espaçadas uniformemente
-        const positions = [-0.9, -0.3, 0.3, 0.9]; // Quatro aros ao longo do barril
-        positions.forEach(pos => {
+        const ringPositions = [-0.9, -0.3, 0.3, 0.9];
+        ringPositions.forEach(pos => {
             const ring = new THREE.Mesh(ringGeometry, ringMaterial);
             ring.position.set(0, pos, 0);
-            ring.rotation.x = Math.PI / 2; // Alinhar com o barril
-            barrel.add(ring);
+            ring.rotation.x = Math.PI / 2;
+            barrelMesh.add(ring);
         });
+
+        // Position barrel at the stairs on the top floor with posição X mais aleatória
+        const spawnY = this.floorHeight * (this.numFloors - 1) + 3;
+        const spawnZ = this.floorLength * 0.15;
+        // Usar toda a largura da plataforma para spawn, deixando margem nas bordas
+        const spawnX = (Math.random() - 0.5) * (this.boundaryWidth - 8);
+        barrelParent.position.set(spawnX, spawnY, spawnZ);
+
+        // Add properties for movement with velocidade mais variada
+        barrelParent.userData.floor = this.numFloors - 1;
+        barrelParent.userData.speed = 50 + Math.random() * 40; // Velocidade base entre 50 e 90
+        barrelParent.userData.rotationSpeed = 6 + Math.random() * 4; // Rotação entre 6 e 10
+        barrelParent.userData.movingToBack = true;
+        barrelParent.userData.verticalSpeed = 0;
+        barrelParent.userData.lateralSpeed = (Math.random() - 0.5) * 10; // Movimento lateral
         
-        return barrel;
+        // Ensure barrel renders in front of other objects
+        barrelParent.renderOrder = 2;
+        barrelMesh.material.depthTest = true;
+        barrelMesh.material.transparent = false;
+
+        // Configurar sombras para toda a estrutura
+        barrelParent.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+
+        // Add to scene and tracking array
+        this.scene.add(barrelParent);
+        this.barrels.push(barrelParent);
+
+        // Definir próximo intervalo de spawn aleatoriamente
+        this.barrelSpawnInterval = this.minSpawnInterval + Math.random() * (this.maxSpawnInterval - this.minSpawnInterval);
     }
 
     createGirder(x, y, z, width, height, depth, color = 0x4a4a4a) {
@@ -741,8 +635,11 @@ export class Level {
         });
         const girder = new THREE.Mesh(geometry, material);
         girder.position.set(x, y, z);
+        
+        // Configurar sombras para as vigas
         girder.castShadow = true;
         girder.receiveShadow = true;
+        
         this.scene.add(girder);
         return girder;
     }
@@ -754,6 +651,32 @@ export class Level {
 
     update(deltaTime) {
         if (!deltaTime) return;
+
+        // Atualizar o mixer de animações do DK
+        if (this.dkMixer) {
+            this.dkMixer.update(deltaTime);
+        }
+
+        // Check for victory condition - player reaching DK
+        if (this.player && this.player.mesh && this.donkeyKong && this.game && this.game.isRunning) {
+            const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
+            const dkBox = new THREE.Box3().setFromObject(this.donkeyKong);
+            
+            // Adjust player hitbox to be more forgiving
+            playerBox.min.y += 0.5;
+            playerBox.max.y -= 0.3;
+            playerBox.min.x += 0.2;
+            playerBox.max.x -= 0.2;
+            playerBox.min.z += 0.2;
+            playerBox.max.z -= 0.2;
+            
+            if (playerBox.intersectsBox(dkBox)) {
+                console.log('Player reached Donkey Kong! Victory!');
+                if (this.game.onPlayerWin) {
+                    this.game.onPlayerWin();
+                }
+            }
+        }
 
         // Only spawn and update barrels if game has started
         if (this.gameStarted) {
@@ -778,6 +701,16 @@ export class Level {
                     barrel.position.z -= barrel.userData.speed * deltaTime;
                 }
 
+                // Movimento lateral mais suave
+                barrel.position.x += barrel.userData.lateralSpeed * deltaTime;
+
+                // Verificar colisão com as paredes laterais de forma mais suave
+                const halfWidth = this.boundaryWidth / 2 - 2;
+                if (Math.abs(barrel.position.x) > halfWidth) {
+                    barrel.userData.lateralSpeed *= -0.8; // Reduzir velocidade ao bater
+                    barrel.position.x = Math.sign(barrel.position.x) * halfWidth;
+                }
+
                 // Update rotation based on movement
                 if (barrel.userData.movingToBack) {
                     barrel.rotation.x += barrel.userData.rotationSpeed * deltaTime;
@@ -785,8 +718,8 @@ export class Level {
                     barrel.rotation.x -= barrel.userData.rotationSpeed * deltaTime;
                 }
 
-                // Apply gravity
-                const gravity = 40;
+                // Apply gravity mais forte para cair mais rápido
+                const gravity = 50;
                 barrel.userData.verticalSpeed -= gravity * deltaTime;
                 barrel.position.y += barrel.userData.verticalSpeed * deltaTime;
 
@@ -797,6 +730,29 @@ export class Level {
                 if (barrel.position.y < minHeight) {
                     barrel.position.y = minHeight;
                     barrel.userData.verticalSpeed = 0;
+                }
+
+                // Check for player collision
+                if (this.player && this.player.mesh) {
+                    // Create collision boxes
+                    const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
+                    const barrelBox = new THREE.Box3().setFromObject(barrel);
+                    
+                    // Adjust player hitbox to be more forgiving
+                    playerBox.min.y += 0.5; // Reduce bottom of hitbox
+                    playerBox.max.y -= 0.3; // Reduce top of hitbox
+                    playerBox.min.x += 0.2; // Reduce sides of hitbox
+                    playerBox.max.x -= 0.2;
+                    playerBox.min.z += 0.2;
+                    playerBox.max.z -= 0.2;
+                    
+                    // Check for collision
+                    if (barrelBox.intersectsBox(playerBox)) {
+                        console.log('Player hit by barrel!');
+                        if (this.game && this.game.onPlayerHit) {
+                            this.game.onPlayerHit('barrel');
+                        }
+                    }
                 }
 
                 // Check if barrel has reached the boundary walls
@@ -818,9 +774,13 @@ export class Level {
                     barrel.position.z = isEvenFloor ? 0 : this.floorLength;
                     barrel.userData.movingToBack = isEvenFloor;
                     
-                    // Set initial falling velocity and position
-                    barrel.userData.verticalSpeed = -5;
-                    barrel.position.y = (barrel.userData.floor * this.floorHeight) + 10; // Start higher for a more visible drop
+                    // Velocidade mais consistente ao mudar de andar
+                    barrel.userData.speed = 60 + Math.random() * 20; // Menos variação
+                    barrel.userData.lateralSpeed = (Math.random() - 0.5) * 5; // Movimento lateral mais suave
+                    
+                    // Pequeno salto apenas ao mudar de andar
+                    barrel.userData.verticalSpeed = 3;
+                    barrel.position.y = (barrel.userData.floor * this.floorHeight) + 5; // Altura inicial menor
                 }
             }
 
@@ -847,6 +807,10 @@ export class Level {
             this.donkeyKong && this.player && this.game.isRunning) {
             this.throwBarrel();
             this.nextBarrelThrowTime = this.game.time + this.barrelThrowInterval;
+        }
+
+        if (this.itemManager) {
+            this.itemManager.update(deltaTime);
         }
     }
 
@@ -1230,5 +1194,128 @@ export class Level {
                 this.barrels.splice(i, 1);
             }
         }
+    }
+
+    createSun() {
+        // Criar o objeto pai do sol
+        const sunParent = new THREE.Object3D();
+        sunParent.position.set(-100, 150, -50);
+
+        // Criar o disco principal do sol (mais vibrante)
+        const sunGeometry = new THREE.CircleGeometry(15, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({
+            color: 0xFFD700, // Dourado mais vibrante
+            side: THREE.DoubleSide
+        });
+        const sunCore = new THREE.Mesh(sunGeometry, sunMaterial);
+        sunParent.add(sunCore);
+
+        // Adicionar brilho mais intenso ao redor do disco
+        const glowGeometry = new THREE.CircleGeometry(20, 32);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xFFA500, // Laranja para contraste
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.z = -0.2;
+        sunParent.add(glow);
+
+        // Criar raios principais mais longos e contrastantes
+        const numMainRays = 12; // Menos raios para mais destaque
+        const rayGeometry = new THREE.BufferGeometry();
+        const rayVertices = [];
+        
+        for (let i = 0; i < numMainRays; i++) {
+            const angle = (i / numMainRays) * Math.PI * 2;
+            const innerRadius = 15;
+            // Raios mais longos para maior visibilidade
+            const outerRadius = i % 2 === 0 ? 35 : 25;
+            
+            rayVertices.push(
+                Math.cos(angle) * innerRadius,
+                Math.sin(angle) * innerRadius,
+                0,
+                Math.cos(angle) * outerRadius,
+                Math.sin(angle) * outerRadius,
+                0
+            );
+        }
+        
+        rayGeometry.setAttribute('position', new THREE.Float32BufferAttribute(rayVertices, 3));
+        const rayMaterial = new THREE.LineBasicMaterial({
+            color: 0xFFD700,
+            linewidth: 3 // Linha mais grossa
+        });
+        const rays = new THREE.LineSegments(rayGeometry, rayMaterial);
+        sunParent.add(rays);
+
+        // Adicionar raios secundários mais visíveis
+        const numSecondaryRays = 12;
+        const secondaryRayGeometry = new THREE.BufferGeometry();
+        const secondaryRayVertices = [];
+        
+        for (let i = 0; i < numSecondaryRays; i++) {
+            const angle = ((i / numSecondaryRays) * Math.PI * 2) + (Math.PI / numSecondaryRays);
+            const innerRadius = 15;
+            const outerRadius = 30;
+            
+            secondaryRayVertices.push(
+                Math.cos(angle) * innerRadius,
+                Math.sin(angle) * innerRadius,
+                0,
+                Math.cos(angle) * outerRadius,
+                Math.sin(angle) * outerRadius,
+                0
+            );
+        }
+        
+        secondaryRayGeometry.setAttribute('position', new THREE.Float32BufferAttribute(secondaryRayVertices, 3));
+        const secondaryRayMaterial = new THREE.LineBasicMaterial({
+            color: 0xFFA500, // Laranja para contraste
+            transparent: true,
+            opacity: 0.7,
+            linewidth: 2
+        });
+        const secondaryRays = new THREE.LineSegments(secondaryRayGeometry, secondaryRayMaterial);
+        sunParent.add(secondaryRays);
+
+        // Adicionar luz do sol mais intensa
+        const sunLight = new THREE.PointLight(0xffffcc, 2, 500);
+        sunLight.position.set(0, 0, 0);
+        sunParent.add(sunLight);
+
+        // Animação mais rápida e notável
+        let time = 0;
+        const animate = () => {
+            time += 0.016; // Aproximadamente 60 FPS
+
+            // Rotação mais rápida dos raios em direções opostas
+            rays.rotation.z += 0.001;
+            secondaryRays.rotation.z -= 0.0015;
+            
+            // Pulsar mais pronunciado do brilho
+            const glowScale = 1 + Math.sin(time * 2) * 0.2; // Aumentado amplitude
+            glow.scale.set(glowScale, glowScale, 1);
+            
+            // Pulsar suave do núcleo
+            const coreScale = 1 + Math.sin(time * 3) * 0.1;
+            sunCore.scale.set(coreScale, coreScale, 1);
+            
+            // Variar a opacidade do brilho
+            glowMaterial.opacity = 0.4 + Math.sin(time * 1.5) * 0.2;
+            
+            requestAnimationFrame(animate);
+        };
+        animate();
+
+        // Adicionar o sol à cena
+        this.scene.add(sunParent);
+        this.sun = sunParent;
+    }
+
+    getItemManager() {
+        return this.itemManager;
     }
 } 

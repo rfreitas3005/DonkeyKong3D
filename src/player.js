@@ -5,38 +5,50 @@ export class Player {
     constructor(scene, camera) {
         this.scene = scene;
         this.camera = camera;
+        this.orthographicCamera = null;
+        this.currentCamera = 'perspective';
         this.mesh = null;
         this.tempMesh = null;
         this.mixer = null;
         this.animations = {};
         this.currentAnimation = null;
         this.idleTimer = 0;
-        this.idleDelay = 10; // 10 seconds delay before main idle animation
+        this.idleDelay = 10;
         this.isJumping = false;
-        this.lastJumpTime = 0; // Track last jump time
-        this.jumpCooldown = 1.0; // 1 second cooldown
+        this.lastJumpTime = 0;
+        this.jumpCooldown = 1.0;
+        this.controlsEnabled = true;
         
-        // Reduced movement speeds
-        this.moveSpeed = 0.04;
-        this.climbSpeed = 0.025;
-        this.jumpForce = 0.15;
-        this.gravity = 0.004;
+        // Camera settings
+        this.moveSpeed = 0.075;
+        this.turnSpeed = 2.0;
+        this.jumpForce = 0.35;
+        this.gravity = 0.018;
+        this.verticalSpeed = 0;
+        this.climbSpeed = 0.04;
         
         this.velocity = new THREE.Vector3();
         this.currentFloor = 0;
-        this.floorHeight = 16;
+        this.floorHeight = 50; // Aumentado de 16 para 50
         this.onLadder = false;
         this.movementDirection = new THREE.Vector3();
         this.isLoaded = false;
         this.floorLength = 200;
         this.laneWidth = 6;
-        this.enabled = false; // Adicionar propriedade enabled
+        this.enabled = false;
 
-        // Camera control variables - restaurada configuração original
         this.cameraOffset = new THREE.Vector3(0, 3, 6);
         this.cameraRotation = new THREE.Euler(0, 0, 0);
         this.mouseSensitivity = 0.002;
         this.isPointerLocked = false;
+
+        // Player light properties
+        this.playerLight = null;
+        this.defaultLightColor = 0xffffff;
+        this.speedLightColor = 0xffff00;
+        this.invincibleLightColor = 0xffd700;
+        this.defaultLightIntensity = 1;
+        this.powerupLightIntensity = 2.5;
 
         this.setupControls();
         this.init();
@@ -55,6 +67,16 @@ export class Player {
         this.scene.add(this.tempMesh);
         this.mesh = this.tempMesh;
 
+        // Create player light
+        this.playerLight = new THREE.PointLight(this.defaultLightColor, this.defaultLightIntensity, 5);
+        this.playerLight.castShadow = true;
+        this.playerLight.shadow.mapSize.width = 512;
+        this.playerLight.shadow.mapSize.height = 512;
+        this.playerLight.shadow.camera.near = 0.5;
+        this.playerLight.shadow.camera.far = 10;
+        this.tempMesh.add(this.playerLight);
+        this.playerLight.position.set(0, 1, 0);
+
         // Create collision box
         this.collider = new THREE.Box3();
 
@@ -62,8 +84,78 @@ export class Player {
         await this.loadCharacterModel();
     }
 
+    retargetAnimation(clip, targetSkeleton) {
+        // Map of common bone names
+        const boneMap = {
+            'mixamorig:hips': 'Hips',
+            'mixamorig:spine': 'Spine',
+            'mixamorig:spine1': 'Spine1',
+            'mixamorig:spine2': 'Spine2',
+            'mixamorig:neck': 'Neck',
+            'mixamorig:head': 'Head',
+            'mixamorig:leftupperarm': 'LeftArm',
+            'mixamorig:leftforearm': 'LeftForeArm',
+            'mixamorig:lefthand': 'LeftHand',
+            'mixamorig:rightupperarm': 'RightArm',
+            'mixamorig:rightforearm': 'RightForeArm',
+            'mixamorig:righthand': 'RightHand',
+            'mixamorig:leftupperleg': 'LeftUpLeg',
+            'mixamorig:leftleg': 'LeftLeg',
+            'mixamorig:leftfoot': 'LeftFoot',
+            'mixamorig:rightupperleg': 'RightUpLeg',
+            'mixamorig:rightleg': 'RightLeg',
+            'mixamorig:rightfoot': 'RightFoot'
+        };
+
+        const retargetedTracks = [];
+
+        clip.tracks.forEach(track => {
+            const trackSplit = track.name.split('.');
+            const boneName = trackSplit[0].toLowerCase();
+            const property = trackSplit[1];
+
+            // Try to find matching bone name
+            let targetBoneName = null;
+            
+            // First try direct match
+            targetSkeleton.traverse(bone => {
+                if (bone.isBone && bone.name.toLowerCase() === boneName) {
+                    targetBoneName = bone.name;
+                }
+            });
+
+            // If no direct match, try mapped name
+            if (!targetBoneName) {
+                for (const [source, target] of Object.entries(boneMap)) {
+                    if (boneName.includes(source.toLowerCase())) {
+                        targetSkeleton.traverse(bone => {
+                            if (bone.isBone && bone.name.includes(target)) {
+                                targetBoneName = bone.name;
+                            }
+                        });
+                        break;
+                    }
+                }
+            }
+
+            if (targetBoneName) {
+                // Clone the track and update the bone name
+                const newTrack = track.clone();
+                newTrack.name = `${targetBoneName}.${property}`;
+                retargetedTracks.push(newTrack);
+            }
+        });
+
+        // Create new animation clip with retargeted tracks
+        return new THREE.AnimationClip(
+            clip.name,
+            clip.duration,
+            retargetedTracks
+        );
+    }
+
     async loadCharacterModel() {
-        if (this.isLoaded) return; // Prevent multiple loads
+        if (this.isLoaded) return;
 
         const loader = new FBXLoader();
         
@@ -77,31 +169,36 @@ export class Player {
             model.position.copy(this.tempMesh.position);
             model.rotation.copy(this.tempMesh.rotation);
             
-            // Garantir que o modelo é visível
+            // Garantir que o modelo é visível e configurar sombras
             model.visible = true;
-            model.traverse(child => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                    child.visible = true;
+            model.castShadow = true;
+            model.receiveShadow = true;
+            
+            // Log skeleton structure
+            console.log('Character skeleton structure:');
+            model.traverse(bone => {
+                if (bone.isBone) {
+                    console.log(`Found bone: ${bone.name}`);
+                }
+                if (bone.isMesh) {
+                    bone.castShadow = true;
+                    bone.receiveShadow = true;
                     
-                    // Garantir que os materiais estão configurados corretamente
-                    if (child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(m => {
+                    // Melhorar materiais para sombras mais realistas
+                    if (bone.material) {
+                        if (Array.isArray(bone.material)) {
+                            bone.material.forEach(m => {
+                                m.shadowSide = THREE.FrontSide;
                                 m.needsUpdate = true;
-                                m.transparent = false;
-                                m.opacity = 1.0;
                             });
                         } else {
-                            child.material.needsUpdate = true;
-                            child.material.transparent = false;
-                            child.material.opacity = 1.0;
+                            bone.material.shadowSide = THREE.FrontSide;
+                            bone.material.needsUpdate = true;
                         }
                     }
                 }
             });
-            
+
             // Clean up temporary mesh
             if (this.tempMesh && this.tempMesh.parent) {
                 this.scene.remove(this.tempMesh);
@@ -124,37 +221,45 @@ export class Player {
                 'idle': './models/idle.fbx',
                 'idle2': './models/idle2.fbx',
                 'run': './models/run.fbx',
-                'jump': './models/jump.fbx'
+                'jump': './models/jump.fbx',
+                'death': './models/death.fbx'
             };
 
             // Load each animation
             for (const [name, path] of Object.entries(animations)) {
                 try {
+                    console.log(`Loading animation: ${name} from path: ${path}`);
                     const animFile = await loader.loadAsync(path);
                     
                     if (!animFile.animations || animFile.animations.length === 0) {
+                        console.error(`No animations found in ${name} file at ${path}`);
                         continue;
                     }
 
-                    // Get the animation and retarget it to our model
-                    const anim = animFile.animations[0];
-                    const action = this.mixer.clipAction(anim);
-                    this.animations[name] = action;
+                    // Get the original animation clip
+                    const originalClip = animFile.animations[0];
                     
-                    // Remove any additional meshes that might have been loaded
-                    animFile.traverse(child => {
-                        if (child.isMesh) {
-                            child.removeFromParent();
-                            if (child.geometry) child.geometry.dispose();
-                            if (child.material) {
-                                if (Array.isArray(child.material)) {
-                                    child.material.forEach(m => m.dispose());
-                                } else {
-                                    child.material.dispose();
-                                }
-                            }
-                        }
-                    });
+                    // Retarget the animation
+                    const retargetedClip = this.retargetAnimation(originalClip, model);
+                    
+                    // Create the animation action
+                    const action = this.mixer.clipAction(retargetedClip);
+                    
+                    // Configure death animation
+                    if (name === 'death') {
+                        console.log('Configuring death animation');
+                        action.loop = THREE.LoopOnce;
+                        action.clampWhenFinished = true;
+                        action.repetitions = 1;
+                        
+                        // Log the retargeted bones
+                        console.log('Death animation retargeted to bones:', 
+                            retargetedClip.tracks.map(track => track.name));
+                    }
+                    
+                    this.animations[name] = action;
+                    console.log(`Animation ${name} successfully retargeted and ready`);
+                    
                 } catch (error) {
                     console.error(`Error loading animation ${name}:`, error);
                 }
@@ -173,34 +278,89 @@ export class Player {
         } catch (error) {
             console.error('Error loading character model:', error);
             if (this.tempMesh) {
-                this.tempMesh.material.opacity = 1.0; // Tornar visível para debug
-                this.tempMesh.material.color.set(0xFF0000); // Vermelho para indicar erro
+                this.tempMesh.material.opacity = 1.0;
+                this.tempMesh.material.color.set(0xFF0000);
                 this.mesh = this.tempMesh;
-                this.isLoaded = true; // Marcar como carregado mesmo com erro
+                this.isLoaded = true;
             }
         }
     }
 
     playAnimation(name, force = false) {
-        if (!this.mixer || !this.animations[name]) return;
+        console.log(`Attempting to play animation: ${name}, force: ${force}`);
+        
+        if (!this.mixer) {
+            console.error('No animation mixer available');
+            return;
+        }
+        
+        if (!this.animations[name]) {
+            console.error(`Animation ${name} not found in available animations:`, Object.keys(this.animations));
+            return;
+        }
+        
+        // If we're currently playing death animation, don't interrupt it unless forced
+        if (this.currentAnimation === 'death' && !force) {
+            console.log('Death animation in progress, not interrupting');
+            return;
+        }
         
         // If it's the same animation and we're not forcing it, don't restart
-        if (this.currentAnimation === name && !force) return;
+        if (this.currentAnimation === name && !force) {
+            console.log(`Animation ${name} already playing`);
+            return;
+        }
         
+        console.log(`Playing animation: ${name}`);
+        
+        // Special handling for death animation
+        if (name === 'death') {
+            console.log('Initializing death animation sequence');
+            // Stop all current animations immediately
+            this.mixer.stopAllAction();
+            
+            const deathAnim = this.animations[name];
+            // Configure death animation
+            deathAnim.setLoop(THREE.LoopOnce);
+            deathAnim.clampWhenFinished = true;
+            deathAnim.setEffectiveTimeScale(1.0);
+            deathAnim.setEffectiveWeight(1.0);
+            deathAnim.reset();
+            deathAnim.play();
+            
+            // Add event listener for animation completion
+            this.mixer.addEventListener('finished', (e) => {
+                if (e.action === deathAnim) {
+                    console.log('Death animation completed');
+                }
+            });
+            
+            this.currentAnimation = name;
+            return;
+        }
+        
+        // Normal animation handling
         if (this.currentAnimation) {
             const current = this.animations[this.currentAnimation];
             const next = this.animations[name];
             
             if (current !== next) {
-                // Crossfade to the new animation
-                current.fadeOut(0.2);
-                next.reset().fadeIn(0.2).play();
-                this.currentAnimation = name;
+                const fadeTime = name === 'jump' ? 0.1 : 0.2;
+                current.fadeOut(fadeTime);
+                next.reset().fadeIn(fadeTime).play();
+                
+                if (name === 'jump') {
+                    next.setEffectiveTimeScale(1.0);
+                }
             }
         } else {
             this.animations[name].reset().play();
-            this.currentAnimation = name;
+            if (name === 'jump') {
+                this.animations[name].setEffectiveTimeScale(1.0);
+            }
         }
+        
+        this.currentAnimation = name;
     }
 
     setupControls() {
@@ -211,7 +371,8 @@ export class Player {
             right: false,
             up: false,
             down: false,
-            jump: false
+            jump: false,
+            switchCamera: false
         };
 
         // Remover handlers antigos se existirem
@@ -285,10 +446,69 @@ export class Player {
     }
 
     onKeyDown(event) {
-        console.log('Key pressed:', event.key, event.code);
-        
-        // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
+        if (!this.controlsEnabled) {
+            return;
+        }
+
         switch (event.code) {
+            case 'KeyV':
+                console.log('V key pressed - changing camera view');
+                if (this.currentCamera === 'perspective') {
+                    // Store current camera position and rotation
+                    this.savedCameraState = {
+                        position: this.camera.position.clone(),
+                        rotation: this.camera.rotation.clone()
+                    };
+                    
+                    // Switch to top-down view
+                    this.currentCamera = '2d';
+                    
+                    // Position camera high above player
+                    this.camera.position.set(
+                        this.mesh.position.x,
+                        200,
+                        this.mesh.position.z
+                    );
+                    
+                    // Point camera straight down
+                    this.camera.rotation.x = -Math.PI / 2;
+                    this.camera.rotation.y = 0;
+                    this.camera.rotation.z = 0;
+                    
+                    console.log('Switched to top-down view');
+                } else {
+                    // Switch back to normal view
+                    this.currentCamera = 'perspective';
+                    
+                    // Restore saved camera state
+                    if (this.savedCameraState) {
+                        this.camera.position.copy(this.savedCameraState.position);
+                        this.camera.rotation.copy(this.savedCameraState.rotation);
+                    }
+                    
+                    console.log('Switched back to normal view');
+                }
+                break;
+                
+            case 'KeyG':
+                // Teletransportar para o último andar (onde está o DK)
+                if (this.mesh) {
+                    // Calcular a altura do último andar
+                    const lastFloorY = (3) * this.floorHeight; // 3 é o índice do último andar (total de 4 andares, 0-3)
+                    
+                    // Posicionar o jogador
+                    this.mesh.position.y = lastFloorY + 1; // +1 para ficar em cima do chão
+                    this.mesh.position.z = this.floorLength * 0.85; // Mesma posição Z do DK
+                    this.mesh.position.x = 0; // Centralizar na plataforma
+                    
+                    // Resetar física
+                    this.velocity.y = 0;
+                    this.isJumping = false;
+                    this.currentFloor = 3; // Atualizar o andar atual
+                    
+                    console.log('Teleported to Donkey Kong floor');
+                }
+                break;
             case 'KeyA':
             case 'ArrowLeft':
                 console.log('LEFT key pressed');
@@ -352,9 +572,10 @@ export class Player {
     }
 
     onKeyUp(event) {
-        console.log('Key released:', event.key, event.code);
-        
-        // Usando event.code para maior compatibilidade entre teclados de diferentes idiomas
+        if (!this.controlsEnabled) {
+            return;
+        }
+
         switch (event.code) {
             case 'KeyA':
             case 'ArrowLeft':
@@ -485,8 +706,29 @@ export class Player {
     }
 
     update(deltaTime) {
+        // Check if controls are enabled before processing any updates
+        if (!this.controlsEnabled) {
+            // Even when controls are disabled, we should update the animation mixer
+            if (this.mixer) {
+                this.mixer.update(deltaTime);
+            }
+            return;
+        }
+
+        // If we're playing death animation, only update the mixer
+        if (this.currentAnimation === 'death') {
+            if (this.mixer) {
+                this.mixer.update(deltaTime);
+            }
+            return;
+        }
+
         // Verificação inicial - se o jogador não estiver habilitado, não atualize nada
         if (!this.enabled) {
+            // Still update mixer for death animation
+            if (this.mixer) {
+                this.mixer.update(deltaTime);
+            }
             return;
         }
 
@@ -504,9 +746,9 @@ export class Player {
             }
         }
 
-        // Update animation mixer
+        // Update animation mixer com velocidade ajustada para o pulo
         if (this.mixer) {
-            const animSpeed = this.isJumping ? 0.6 : 0.8;
+            const animSpeed = this.isJumping ? 1.0 : 1.0; // Removida aceleração da animação de pulo
             this.mixer.update(deltaTime * animSpeed);
         }
 
@@ -559,55 +801,52 @@ export class Player {
         // Update current floor based on height
         this.currentFloor = Math.floor(this.mesh.position.y / this.floorHeight);
 
-        // Update camera
+        // Update camera position
         this.updateCameraPosition();
-
-        // DEBUG: Logging key state occasionally to verify input
-        if (Math.floor(Date.now() / 1000) % 5 === 0) {
-            if (this.isMoving()) {
-                console.log('Keys pressed:', 
-                    (this.keys.up ? 'UP ' : '') + 
-                    (this.keys.down ? 'DOWN ' : '') + 
-                    (this.keys.left ? 'LEFT ' : '') + 
-                    (this.keys.right ? 'RIGHT ' : '')
-                );
-            }
-        }
     }
 
     updateCameraPosition() {
-        // Se o jogador ou a câmera não existem, não fazer nada
-        if (!this.mesh || !this.camera) {
-            console.warn('updateCameraPosition: Player mesh or camera not available.');
+        if (!this.mesh) {
+            console.warn('updateCameraPosition: Player mesh not available.');
             return;
         }
 
-        // Calculate camera rotation based on mouse input
-        const rotation = new THREE.Euler(
-            this.cameraRotation.x,
-            this.cameraRotation.y,
-            0,
-            'YXZ'
-        );
+        if (this.currentCamera === 'perspective') {
+            // Original perspective camera behavior
+            const rotation = new THREE.Euler(
+                this.cameraRotation.x,
+                this.cameraRotation.y,
+                0,
+                'YXZ'
+            );
 
-        // Calculate camera position with adjusted offset
-        const offset = new THREE.Vector3(
-            0,
-            this.cameraOffset.y,
-            this.cameraOffset.z
-        );
-        offset.applyEuler(rotation);
-        
-        // Set camera position and rotation
-        const targetPosition = this.mesh.position.clone().add(offset);
-        this.camera.position.copy(targetPosition);
-        this.camera.rotation.copy(rotation);
+            const offset = new THREE.Vector3(
+                0,
+                this.cameraOffset.y,
+                this.cameraOffset.z
+            );
+            offset.applyEuler(rotation);
+            
+            const targetPosition = this.mesh.position.clone().add(offset);
+            this.camera.position.copy(targetPosition);
+            this.camera.rotation.copy(rotation);
+            this.camera.rotation.x -= 0.2;
+        } else if (this.currentCamera === '2d') {
+            // Update top-down camera position to follow player
+            this.camera.position.x = this.mesh.position.x;
+            this.camera.position.z = this.mesh.position.z;
+            
+            // Posicionar a câmera 49 unidades acima do piso atual
+            const nextFloorY = (this.currentFloor + 1) * this.floorHeight;
+            this.camera.position.y = nextFloorY - 1;
+            
+            // Keep camera pointed straight down
+            this.camera.rotation.x = -Math.PI / 2;
+            this.camera.rotation.y = 0;
+            this.camera.rotation.z = 0;
 
-        // Add a slightly stronger tilt to the camera to see the path ahead better
-        this.camera.rotation.x -= 0.2;
-        
-        // Log camera position for debugging
-        // console.log(`Camera Position: X=${this.camera.position.x.toFixed(2)}, Y=${this.camera.position.y.toFixed(2)}, Z=${this.camera.position.z.toFixed(2)}`);
+            console.log('Camera Y position:', this.camera.position.y, 'Current floor:', this.currentFloor);
+        }
     }
 
     checkCollisions() {
@@ -662,6 +901,11 @@ export class Player {
     }
 
     onDeath() {
+        // Tocar som de morte
+        if (this.scene.parent && this.scene.parent.soundManager) {
+            this.scene.parent.soundManager.playSound('death');
+        }
+        
         // Reset player position
         this.mesh.position.set(this.startX, this.startY, 0);
         
@@ -801,31 +1045,33 @@ export class Player {
 
     applyGravity() {
         if (this.isJumping) {
-            // Slower gravity at the peak of the jump
-            const peakHeight = 0.1;
+            // Ajuste da gravidade durante o pulo
+            const peakHeight = 0.1; // Reduzido de 0.12 para 0.1
             if (Math.abs(this.velocity.y) < peakHeight) {
-                this.velocity.y -= this.gravity * 0.5;
+                this.velocity.y -= this.gravity * 0.8; // Aumentado de 0.7 para 0.8
+            } else if (this.velocity.y > 0) {
+                this.velocity.y -= this.gravity * 1.0; // Aumentado de 0.9 para 1.0
             } else {
-                this.velocity.y -= this.gravity;
+                this.velocity.y -= this.gravity * 1.2; // Aumentado de 1.1 para 1.2
             }
         } else {
-            this.velocity.y -= this.gravity * 1.1;
+            this.velocity.y -= this.gravity * 1.3; // Aumentado de 1.2 para 1.3
         }
         
         this.mesh.position.y += this.velocity.y;
 
         // Ground collision
-        const floorY = this.currentFloor * this.floorHeight + 1.0; // Ajustado de 1.25 para 1.0 para corrigir a flutuação
-        if (this.mesh.position.y < floorY) {
+        const floorY = this.currentFloor * this.floorHeight + 1.0;
+        if (this.mesh.position.y <= floorY) {
             this.mesh.position.y = floorY;
             this.velocity.y = 0;
             this.isJumping = false;
             
             // When landing, check if moving to play run animation, otherwise use idle2
             if (this.isMoving() && this.animations['run']) {
-                this.playAnimation('run');
+                this.playAnimation('run', true);
             } else if (this.animations['idle2']) {
-                this.playAnimation('idle2');
+                this.playAnimation('idle2', true);
             }
         }
     }
@@ -833,61 +1079,15 @@ export class Player {
     // Add new method to enable controls
     enableControls() {
         console.log('Enabling player controls forcefully...');
-        this.enabled = true; // Definir como habilitado
-        
-        // Adicionar handler de teclas direto ao documento
-        this.handleKeyPress = (e) => {
-            if (e.type === 'keydown') {
-                this.onKeyDown(e);
-            } else if (e.type === 'keyup') {
-                this.onKeyUp(e);
-            }
-        };
-        
-        // Adicionar os event listeners
-        document.addEventListener('keydown', this.handleKeyPress);
-        document.addEventListener('keyup', this.handleKeyPress);
         
         try {
-            console.log('Attempting to enable pointer lock...');
+            // Remove any existing instructions
+            const elementsToRemove = document.querySelectorAll('#pointer-lock-instruction, .game-instructions, .click-instruction');
+            elementsToRemove.forEach(el => el.remove());
             
-            // Verificar se já existe uma instrução na tela
-            if (document.getElementById('pointer-lock-instruction')) {
-                console.log('Instruction element already exists, not creating a new one');
-                return;
-            }
-            
+            // Request pointer lock directly without showing instructions
             if (!document.pointerLockElement) {
-                // Exibir instrução de clique para o usuário
-                const instruction = document.createElement('div');
-                instruction.id = 'pointer-lock-instruction';
-                instruction.style.position = 'fixed';
-                instruction.style.top = '50%';
-                instruction.style.left = '50%';
-                instruction.style.transform = 'translate(-50%, -50%)';
-                instruction.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                instruction.style.color = 'white';
-                instruction.style.padding = '20px';
-                instruction.style.fontFamily = "'Press Start 2P', monospace";
-                instruction.style.zIndex = '10000';
-                instruction.style.textAlign = 'center';
-                instruction.innerHTML = 'CLIQUE NA TELA PARA JOGAR<br><br>Use WASD para mover<br>Espaço para pular';
-                
-                document.body.appendChild(instruction);
-                
-                // Adicionar event listener para o documento inteiro
-                const requestPointerLock = () => {
-                    document.body.requestPointerLock();
-                    
-                    // Remover a instrução e o listener após o clique
-                    const instructionElement = document.getElementById('pointer-lock-instruction');
-                    if (instructionElement) {
-                        instructionElement.remove();
-                    }
-                    document.removeEventListener('click', requestPointerLock);
-                };
-                
-                document.addEventListener('click', requestPointerLock);
+                document.body.requestPointerLock();
             }
         } catch (error) {
             console.error('Error enabling pointer lock:', error);
@@ -942,6 +1142,77 @@ export class Player {
         if (this.camera) {
             this.camera.position.set(0, 5, 10);
             this.camera.lookAt(0, 0, 0);
+        }
+    }
+
+    toggle2DCamera() {
+        console.log('Toggling bird\'s eye view');
+        
+        if (this.currentCamera === 'perspective') {
+            console.log('Switching to bird\'s eye view');
+            this.currentCamera = '2d';
+            
+            // Store current perspective camera state
+            this.lastPerspectivePosition = {
+                position: this.camera.position.clone(),
+                rotation: this.camera.rotation.clone(),
+                fov: this.camera.fov
+            };
+
+            // Position orthographic camera high above the player
+            this.orthographicCamera.position.set(
+                this.mesh.position.x,
+                150,  // Altura bem alta para visão aérea
+                this.mesh.position.z
+            );
+            
+            // Apontar diretamente para baixo
+            this.orthographicCamera.rotation.x = -Math.PI / 2;
+            this.orthographicCamera.rotation.y = 0;
+            this.orthographicCamera.rotation.z = 0;
+            
+            // Atualizar a matriz de projeção
+            this.orthographicCamera.updateProjectionMatrix();
+            
+            // Trocar para a câmera ortográfica
+            if (this.scene.parent) {
+                this.scene.parent.camera = this.orthographicCamera;
+                console.log('Switched to bird\'s eye camera');
+            }
+            
+        } else {
+            console.log('Switching back to perspective view');
+            this.currentCamera = 'perspective';
+            
+            // Restaurar câmera perspectiva
+            if (this.lastPerspectivePosition) {
+                this.camera.position.copy(this.lastPerspectivePosition.position);
+                this.camera.rotation.copy(this.lastPerspectivePosition.rotation);
+                this.camera.fov = this.lastPerspectivePosition.fov;
+                this.camera.updateProjectionMatrix();
+            }
+            
+            // Trocar de volta para a câmera perspectiva
+            if (this.scene.parent) {
+                this.scene.parent.camera = this.camera;
+                console.log('Switched back to perspective camera');
+            }
+        }
+    }
+
+    jump() {
+        if (!this.isJumping && this.canJump() && Date.now() - this.lastJumpTime > this.jumpCooldown * 1000) {
+            this.isJumping = true;
+            this.verticalSpeed = this.jumpForce;
+            this.lastJumpTime = Date.now();
+            
+            // Tocar som de pulo
+            if (this.scene.parent && this.scene.parent.soundManager) {
+                this.scene.parent.soundManager.playSound('jump');
+            }
+            
+            // Animação de pulo
+            this.playAnimation('jump');
         }
     }
 } 
