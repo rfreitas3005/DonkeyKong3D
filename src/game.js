@@ -77,6 +77,11 @@ export class Game {
                 this.toggleModMenu();
             }
 
+            // Desligar/ligar luzes com J
+            if (e.key.toLowerCase() === 'j') {
+                this.toggleLights();
+            }
+
             // Mod menu navigation
             if (this.modMenuVisible) {
                 switch (e.key) {
@@ -1005,5 +1010,29 @@ export class Game {
             this.gameWonScreen.show(currentScore, Math.max(currentScore, savedHighScore));
             this.isRunning = false;
         }, 1000);
+    }
+
+    toggleLights() {
+        // Alterna entre modo normal e modo "todas as luzes desligadas"
+        if (!this._lightsOff) {
+            // Remove todas as luzes
+            this._originalLights = this.scene.children.filter(obj => obj.isLight);
+            this._originalLights.forEach(light => this.scene.remove(light));
+            // Adiciona uma ambient light fraca para não ficar tudo escuro
+            this._dimLight = new THREE.AmbientLight(0xffffff, 0.12);
+            this.scene.add(this._dimLight);
+            this._lightsOff = true;
+        } else {
+            // Remove a ambient light fraca
+            if (this._dimLight) {
+                this.scene.remove(this._dimLight);
+                this._dimLight = null;
+            }
+            // Restaura as luzes originais
+            if (this._originalLights) {
+                this._originalLights.forEach(light => this.scene.add(light));
+            }
+            this._lightsOff = false;
+        }
     }
 }
