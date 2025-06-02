@@ -98,6 +98,14 @@ export class Game {
                         break;
                 }
             }
+
+            // Reiniciar jogo com R
+            if (e.key.toLowerCase() === 'r') {
+                if (this.isRunning && !this.isPaused) {
+                    this.reset();
+                    this.start();
+                }
+            }
         });
 
         // Add game over screen
@@ -815,16 +823,19 @@ export class Game {
                             this.level.updateScore();
                             localStorage.setItem('lastScore', this.level.score); 
                             this.showFloatingText('+100', hit.mesh.position);
+                            this.showParticles(hit.mesh.position, '#FFD700');
                         } else if (hit.type === ITEM_TYPES.LIGHTNING) {
                             this.activePowerups.speed = true;
                             this.powerupTimers.speed = 5.0;
                             this.applyPowerups();
                             this.showPowerupMessage('SUPER BOOST!');
+                            this.showParticles(hit.mesh.position, '#00ffff');
                         } else if (hit.type === ITEM_TYPES.STAR) {
                             this.activePowerups.invincible = true;
                             this.powerupTimers.invincible = 5.0;
                             this.applyPowerups();
                             this.showPowerupMessage('INVENCÍVEL!');
+                            this.showParticles(hit.mesh.position, '#fffacd');
                         }
                         itemManager.removeItem(hit.mesh);
                     }
@@ -1033,6 +1044,47 @@ export class Game {
                 this._originalLights.forEach(light => this.scene.add(light));
             }
             this._lightsOff = false;
+        }
+    }
+
+    showParticles(position, color = '#FFD700') {
+        // Cria um pequeno efeito de partículas (estrelas) na posição dada
+        const numParticles = 12;
+        for (let i = 0; i < numParticles; i++) {
+            const particle = document.createElement('div');
+            particle.style.position = 'absolute';
+            particle.style.width = '8px';
+            particle.style.height = '8px';
+            particle.style.borderRadius = '50%';
+            particle.style.background = color;
+            particle.style.boxShadow = `0 0 8px 2px ${color}`;
+            particle.style.pointerEvents = 'none';
+            particle.style.zIndex = 2000;
+            particle.style.opacity = '1';
+            particle.style.transition = 'all 0.7s ease-out';
+
+            // Calcula posição inicial na tela
+            const coords = position.clone().project(this.camera);
+            const x = (coords.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-coords.y * 0.5 + 0.5) * window.innerHeight;
+            particle.style.left = `${x}px`;
+            particle.style.top = `${y}px`;
+
+            document.body.appendChild(particle);
+
+            // Direção aleatória
+            const angle = (2 * Math.PI * i) / numParticles + Math.random() * 0.5;
+            const dist = 30 + Math.random() * 20;
+            const dx = Math.cos(angle) * dist;
+            const dy = Math.sin(angle) * dist;
+
+            setTimeout(() => {
+                particle.style.transform = `translate(${dx}px, ${dy}px) scale(0.5)`;
+                particle.style.opacity = '0';
+            }, 30);
+            setTimeout(() => {
+                particle.remove();
+            }, 700);
         }
     }
 }

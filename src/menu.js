@@ -483,6 +483,7 @@ export class GameMenu {
                     <b>V</b>: Alternar câmara 2D/3D<br>
                     <b>Insert</b>: Mod Menu<br>
                     <b>P</b>: Pausa<br>
+                    <b>R</b>: Reiniciar jogo<br>
                     <b>Rato</b>: Olhar à volta<br>
                     <b>ENTER</b>: Selecionar menu<br>
                 </div>
