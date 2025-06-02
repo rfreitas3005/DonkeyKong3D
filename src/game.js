@@ -836,6 +836,12 @@ export class Game {
                             this.applyPowerups();
                             this.showPowerupMessage('INVENCÍVEL!');
                             this.showParticles(hit.mesh.position, '#fffacd');
+                        } else if (hit.type === ITEM_TYPES.DICE) {
+                            this.level.score += 1000;
+                            this.level.updateScore();
+                            localStorage.setItem('lastScore', this.level.score);
+                            this.showFloatingText('+1000', hit.mesh.position, '#00ffea');
+                            this.showParticles(hit.mesh.position, '#00ffea');
                         }
                         itemManager.removeItem(hit.mesh);
                     }

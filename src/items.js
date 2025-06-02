@@ -4,6 +4,7 @@ export const ITEM_TYPES = {
     COIN: 'coin',
     LIGHTNING: 'lightning',
     STAR: 'star',
+    DICE: 'dice',
 };
 
 function createCoin() {
@@ -86,6 +87,23 @@ function createStar() {
     return mesh;
 }
 
+function createDice() {
+    const geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+    const loader = new THREE.TextureLoader();
+    const materials = [
+        new THREE.MeshStandardMaterial({ map: loader.load('assets/dice/face1.png') }),
+        new THREE.MeshStandardMaterial({ map: loader.load('assets/dice/face2.png') }),
+        new THREE.MeshStandardMaterial({ map: loader.load('assets/dice/face3.png') }),
+        new THREE.MeshStandardMaterial({ map: loader.load('assets/dice/face4.png') }),
+        new THREE.MeshStandardMaterial({ map: loader.load('assets/dice/face5.png') }),
+        new THREE.MeshStandardMaterial({ map: loader.load('assets/dice/face6.png') })
+    ];
+    const mesh = new THREE.Mesh(geometry, materials);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData.type = ITEM_TYPES.DICE;
+    return mesh;
+}
 
 export function createItem(type) {
     switch (type) {
@@ -95,6 +113,8 @@ export function createItem(type) {
             return createLightning();
         case ITEM_TYPES.STAR:
             return createStar();
+        case ITEM_TYPES.DICE:
+            return createDice();
         default:
             return null;
     }
@@ -152,6 +172,17 @@ export class ItemManager {
                 this.scene.add(mesh);
                 this.items.push({ mesh, type: ITEM_TYPES.STAR, floor });
             }
+            // Novo: dado (10% de chance)
+            if (Math.random() < 0.1) {
+                const mesh = createItem(ITEM_TYPES.DICE);
+                mesh.position.set(
+                    (Math.random() - 0.5) * (this.boundaryWidth - 6),
+                    floor * this.floorHeight + 2.5,
+                    Math.random() * (this.floorLength - 10) + 5
+                );
+                this.scene.add(mesh);
+                this.items.push({ mesh, type: ITEM_TYPES.DICE, floor });
+            }
         }
     }
 
@@ -172,6 +203,11 @@ export class ItemManager {
                 mesh.rotation.y = t * 2 + seed;
                 mesh.rotation.x = Math.sin(t * 3 + seed) * 0.5 + Math.PI / 2;
                 mesh.rotation.z = Math.sin(t * 2.2 + seed) * 0.15;
+            } else if (type === ITEM_TYPES.DICE) {
+                // Rotação para mostrar todas as faces do cubo
+                mesh.rotation.y = t * 0.7;
+                mesh.rotation.x = Math.sin(t * 0.5) * Math.PI * 0.5;
+                mesh.rotation.z = Math.cos(t * 0.3) * 0.2;
             } else {
                 mesh.rotation.y += 0.03;
                 mesh.rotation.z = Math.sin(t * 2) * 0.2;
