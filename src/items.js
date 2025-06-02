@@ -166,8 +166,14 @@ export class ItemManager {
             const floorY = floor * this.floorHeight;
             const baseY = type === ITEM_TYPES.COIN ? floorY + 2.2 : floorY + 2.5;
             mesh.position.y = baseY + Math.sin(t * 2 + mesh.position.x + mesh.position.z) * 0.1;
-            mesh.rotation.y += 0.03;
-            if (type === ITEM_TYPES.LIGHTNING || type === ITEM_TYPES.STAR) {
+            if (type === ITEM_TYPES.COIN) {
+                // Rotação arcade: gira em Y, flip em X, e balança em Z, com seed por moeda
+                const seed = mesh.position.x * 0.7 + mesh.position.z * 0.3;
+                mesh.rotation.y = t * 2 + seed;
+                mesh.rotation.x = Math.sin(t * 3 + seed) * 0.5 + Math.PI / 2;
+                mesh.rotation.z = Math.sin(t * 2.2 + seed) * 0.15;
+            } else {
+                mesh.rotation.y += 0.03;
                 mesh.rotation.z = Math.sin(t * 2) * 0.2;
             }
 
