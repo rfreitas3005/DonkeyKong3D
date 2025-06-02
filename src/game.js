@@ -8,6 +8,7 @@ import { GameOverScreen } from './gameOverScreen.js';
 import { PauseMenu } from './pauseMenu.js';
 import { SoundManager } from './soundManager.js';
 import { ITEM_TYPES } from './items.js';
+import { GameWonScreen } from './gameWonScreen.js';
 
 export class Game {
     constructor() {
@@ -105,6 +106,8 @@ export class Game {
             speed: 0,
             invincible: 0,
         };
+
+        this.gameWonScreen = null;
 
         this.init();
     }
@@ -977,5 +980,30 @@ export class Game {
         }, 1000);
     }
     
-    
+    onPlayerWin() {
+        // Desabilitar controles do jogador
+        if (this.player) {
+            this.player.enabled = false;
+            this.player.disableControls();
+        }
+        // Parar barris
+        if (this.level) {
+            this.level.gameStarted = false;
+            this.level.stopBarrels && this.level.stopBarrels();
+        }
+        // Mostrar tela de vitória
+        setTimeout(() => {
+            if (!this.gameWonScreen) {
+                this.gameWonScreen = new GameWonScreen(this);
+            }
+            const currentScore = this.level ? this.level.score : 0;
+            const savedHighScore = parseInt(localStorage.getItem('highScore') || '0', 10);
+            if (currentScore > savedHighScore) {
+                localStorage.setItem('highScore', currentScore);
+            }
+            localStorage.setItem('lastScore', currentScore);
+            this.gameWonScreen.show(currentScore, Math.max(currentScore, savedHighScore));
+            this.isRunning = false;
+        }, 1000);
+    }
 }

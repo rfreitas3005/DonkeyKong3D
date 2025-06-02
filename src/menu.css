@@ -107,8 +107,6 @@
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
-
-
 .hitbox-info {
     position: fixed;
     top: 20px;
@@ -422,8 +420,6 @@ input[type="range"]::-webkit-slider-thumb {
     transition: all 0.3s ease;
 }
 
-
-
 .credits-back-button:hover {
     background: rgba(255, 215, 0, 0.2);
     transform: translateX(-50%) scale(1.1);
@@ -438,4 +434,6 @@ input[type="range"]::-webkit-slider-thumb {
     100% {
         transform: rotateX(20deg) translateY(-1000%);
     }
-} 
+}
+
+/* Tela de vitória (Game Won) reutiliza estilos de .game-over-title, .game-message, .final-score, .hi-score, .menu-item, etc. */ 

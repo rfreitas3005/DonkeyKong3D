@@ -782,6 +782,15 @@ export class Level {
             this.nextBarrelThrowTime = this.game.time + this.barrelThrowInterval;
         }
 
+        // Checar vitória (player chegou ao Donkey Kong)
+        if (this.player && this.player.mesh && this.donkeyKong && this.game && this.game.isRunning) {
+            const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
+            const dkBox = new THREE.Box3().setFromObject(this.donkeyKong);
+            if (playerBox.intersectsBox(dkBox)) {
+                this.game.onPlayerWin && this.game.onPlayerWin();
+            }
+        }
+
         if (this.itemManager) {
             this.itemManager.update(deltaTime);
         }
