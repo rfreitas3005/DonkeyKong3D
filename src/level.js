@@ -62,7 +62,13 @@ export class Level {
         this.createDonkeyKong();
         this.createSun();
         // Inicializar e spawnar items
-        this.itemManager = new ItemManager(this.scene, this.floors, this.floorHeight, this.floorLength, this.boundaryWidth, this.player);
+        this.itemManager = new ItemManager(
+            this.scene,
+            this.floors,
+            this.floorHeight,
+            this.floorLength,
+            this.boundaryWidth
+        );
         this.itemManager.spawnItems();
     }
 
@@ -780,15 +786,6 @@ export class Level {
             this.donkeyKong && this.player && this.game.isRunning) {
             this.throwBarrel();
             this.nextBarrelThrowTime = this.game.time + this.barrelThrowInterval;
-        }
-
-        // Checar vitória (player chegou ao Donkey Kong)
-        if (this.player && this.player.mesh && this.donkeyKong && this.game && this.game.isRunning) {
-            const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
-            const dkBox = new THREE.Box3().setFromObject(this.donkeyKong);
-            if (playerBox.intersectsBox(dkBox)) {
-                this.game.onPlayerWin && this.game.onPlayerWin();
-            }
         }
 
         if (this.itemManager) {

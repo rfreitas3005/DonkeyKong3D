@@ -107,6 +107,7 @@ export class GameMenu {
         // Create menu items
         const menuItems = [
             { text: 'PLAY', action: () => this.startGame() },
+            { text: 'CONTROLS', action: () => this.showControls() },
             { text: 'OPTIONS', action: () => this.showOptions() },
             { text: 'CREDITS', action: () => this.showCredits() }
         ];
@@ -460,6 +461,45 @@ export class GameMenu {
         }
     }
     
+    showControls() {
+        // Cria painel/modal de controles se não existir
+        if (!this.controlsPanel) {
+            this.controlsPanel = document.createElement('div');
+            this.controlsPanel.className = 'menu-container';
+            this.controlsPanel.style.zIndex = '10001';
+            this.controlsPanel.style.display = 'flex';
+            this.controlsPanel.style.flexDirection = 'column';
+            this.controlsPanel.style.justifyContent = 'center';
+            this.controlsPanel.style.alignItems = 'center';
+
+            const content = document.createElement('div');
+            content.className = 'menu-content';
+            content.innerHTML = `
+                <div class="game-title">CONTROLS</div>
+                <div style="color: #FFD700; font-size: 20px; text-align: left; margin-bottom: 2rem; font-family: 'Press Start 2P', monospace; line-height: 2.2; letter-spacing: 1px;">
+                    <b>W, A, S, D / Setas</b>: Mover<br>
+                    <b>Espaço</b>: Saltar<br>
+                    <b>J</b>: Alternar luzes<br>
+                    <b>V</b>: Alternar câmara 2D/3D<br>
+                    <b>Insert</b>: Mod Menu<br>
+                    <b>P</b>: Pausa<br>
+                    <b>Rato</b>: Olhar à volta<br>
+                    <b>ENTER</b>: Selecionar menu<br>
+                </div>
+            `;
+            const backBtn = document.createElement('button');
+            backBtn.textContent = 'Back';
+            backBtn.className = 'menu-back-button';
+            backBtn.onclick = () => {
+                this.controlsPanel.style.display = 'none';
+            };
+            content.appendChild(backBtn);
+            this.controlsPanel.appendChild(content);
+            document.body.appendChild(this.controlsPanel);
+        } else {
+            this.controlsPanel.style.display = 'flex';
+        }
+    }
 
     dispose() {
         document.removeEventListener('keydown', this._keydownHandler);
