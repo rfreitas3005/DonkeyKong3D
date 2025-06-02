@@ -39,6 +39,7 @@ export class Level {
         this.isBeatingChest = false;
         this.score = 0;
         this.itemManager = null;
+        this._winTriggered = false;
 
         // Define ladder positions as a class property - removida a escada do andar do DK (3)
         this.ladderPositions = [
@@ -790,6 +791,30 @@ export class Level {
 
         if (this.itemManager) {
             this.itemManager.update(deltaTime);
+        }
+
+        // --- VERIFICAÇÃO DE VITÓRIA ---
+        if (
+            this.game &&
+            this.game.isRunning &&
+            this.player && this.player.mesh &&
+            this.donkeyKong &&
+            !this._winTriggered // Evita múltiplas chamadas
+        ) {
+            // Criar caixas de colisão
+            const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
+            const dkBox = new THREE.Box3().setFromObject(this.donkeyKong);
+            // Ajustar hitbox do DK para ser mais justa
+            dkBox.min.y += 1.5;
+            dkBox.max.y -= 0.5;
+            dkBox.min.x += 0.2;
+            dkBox.max.x -= 0.2;
+            dkBox.min.z += 0.2;
+            dkBox.max.z -= 0.2;
+            if (playerBox.intersectsBox(dkBox)) {
+                this._winTriggered = true;
+                this.game.onPlayerWin();
+            }
         }
     }
 
