@@ -62,13 +62,7 @@ export class Level {
         this.createDonkeyKong();
         this.createSun();
         // Inicializar e spawnar items
-        this.itemManager = new ItemManager(
-            this.scene,
-            this.floors,
-            this.floorHeight,
-            this.floorLength,
-            this.boundaryWidth
-        );
+        this.itemManager = new ItemManager(this.scene, this.floors, this.floorHeight, this.floorLength, this.boundaryWidth, this.player);
         this.itemManager.spawnItems();
     }
 

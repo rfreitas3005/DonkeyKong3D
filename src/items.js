@@ -10,10 +10,10 @@ function createCoin() {
     const geometry = new THREE.CylinderGeometry(0.5, 0.5, 0.08, 64);
     const material = new THREE.MeshStandardMaterial({
         color: 0xFFD700,
-        emissive: 0xffcc00,
-        emissiveIntensity: 1.5,
         metalness: 0.7,
-        roughness: 0.3
+        roughness: 0.3,
+        emissive: 0xffcc00,
+        emissiveIntensity: 1.5
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.x = Math.PI / 2;
@@ -23,9 +23,7 @@ function createCoin() {
     return mesh;
 }
 
-
 function createLightning() {
-    // Relâmpago: raio amarelo estilizado (placeholder: ziguezague)
     const shape = new THREE.Shape();
     shape.moveTo(0, 0);
     shape.lineTo(0.2, 0.4);
@@ -35,17 +33,29 @@ function createLightning() {
     shape.lineTo(0, 1);
     const extrudeSettings = { depth: 0.1, bevelEnabled: false };
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    const material = new THREE.MeshPhongMaterial({ color: 0xFFFF00, shininess: 100 });
+    const material = new THREE.MeshPhongMaterial({
+        color: 0xffff00,
+        shininess: 100,
+        emissive: 0xffff00,
+        emissiveIntensity: 1.2
+    });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.scale.set(0.8, 0.8, 0.8);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.type = ITEM_TYPES.LIGHTNING;
+
+    // Adiciona PointLight ao relâmpago
+    const light = new THREE.PointLight(0xffff00, 5, 12, 2);
+    light.position.set(0, 0.4, 0);
+    light.name = 'itemLight';
+    mesh.add(light);
+
     return mesh;
 }
 
+
 function createStar() {
-    // Estrela: 5 pontas (placeholder)
     const shape = new THREE.Shape();
     const spikes = 5, outerRadius = 0.6, innerRadius = 0.25;
     for (let i = 0; i < spikes * 2; i++) {
@@ -56,13 +66,26 @@ function createStar() {
     shape.closePath();
     const extrudeSettings = { depth: 0.15, bevelEnabled: false };
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    const material = new THREE.MeshPhongMaterial({ color: 0xFFD700, shininess: 120, emissive: 0xFFFF00, emissiveIntensity: 0.5 });
+    const material = new THREE.MeshPhongMaterial({
+        color: 0xffd700,
+        shininess: 120,
+        emissive: 0xffffaa,
+        emissiveIntensity: 1.3
+    });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.type = ITEM_TYPES.STAR;
+
+    // Adiciona PointLight à estrela
+    const light = new THREE.PointLight(0xffffaa, 5, 12, 2);
+    light.position.set(0, 0.4, 0);
+    light.name = 'itemLight';
+    mesh.add(light);
+
     return mesh;
 }
+
 
 export function createItem(type) {
     switch (type) {
@@ -78,21 +101,26 @@ export function createItem(type) {
 }
 
 export class ItemManager {
-    constructor(scene, floors, floorHeight, floorLength, boundaryWidth) {
+    constructor(scene, floors, floorHeight, floorLength, boundaryWidth, player) {
         this.scene = scene;
         this.floors = floors;
         this.floorHeight = floorHeight;
         this.floorLength = floorLength;
         this.boundaryWidth = boundaryWidth;
+        this.player = player;
         this.items = [];
+
+        // Luz única que segue o item mais próximo
+        this.tempLight = new THREE.PointLight(0xffffaa, 5, 10, 2);
+        this.tempLight.castShadow = false;
+        this.tempLight.visible = false;
+        this.scene.add(this.tempLight);
     }
 
     spawnItems() {
-        // Limpar items antigos
         this.items.forEach(item => this.scene.remove(item.mesh));
         this.items = [];
         for (let floor = 0; floor < this.floors.length; floor++) {
-            // Moedas: várias por andar
             const numCoins = 6 + Math.floor(Math.random() * 4);
             for (let i = 0; i < numCoins; i++) {
                 const mesh = createItem(ITEM_TYPES.COIN);
@@ -104,7 +132,6 @@ export class ItemManager {
                 this.scene.add(mesh);
                 this.items.push({ mesh, type: ITEM_TYPES.COIN, floor });
             }
-            // Relâmpago: 0-1 por andar
             if (Math.random() < 0.5) {
                 const mesh = createItem(ITEM_TYPES.LIGHTNING);
                 mesh.position.set(
@@ -115,7 +142,6 @@ export class ItemManager {
                 this.scene.add(mesh);
                 this.items.push({ mesh, type: ITEM_TYPES.LIGHTNING, floor });
             }
-            // Estrela: 0-1 por andar
             if (Math.random() < 0.4) {
                 const mesh = createItem(ITEM_TYPES.STAR);
                 mesh.position.set(
@@ -130,8 +156,12 @@ export class ItemManager {
     }
 
     update(deltaTime) {
-        // Flutuação e rotação
         const t = performance.now() * 0.001;
+
+        let closestItem = null;
+        let closestDist = Infinity;
+        const playerPos = this.player?.mesh?.position;
+
         this.items.forEach(({ mesh, type, floor }) => {
             const floorY = floor * this.floorHeight;
             const baseY = type === ITEM_TYPES.COIN ? floorY + 2.2 : floorY + 2.5;
@@ -140,33 +170,62 @@ export class ItemManager {
             if (type === ITEM_TYPES.LIGHTNING || type === ITEM_TYPES.STAR) {
                 mesh.rotation.z = Math.sin(t * 2) * 0.2;
             }
+
+            if (playerPos) {
+                const dist = mesh.position.distanceTo(playerPos);
+                if (dist < closestDist && dist < 8) {
+                    closestDist = dist;
+                    closestItem = mesh;
+                }
+            }
         });
-        
+
+        if (closestItem) {
+            this.tempLight.position.copy(closestItem.position);
+            this.tempLight.visible = true;
+        } else {
+            this.tempLight.visible = false;
+        }
     }
 
     removeItem(mesh) {
+        // Verifica e remove a luz associada ao item (se existir)
+        const light = mesh.getObjectByName('itemLight');
+        if (light) {
+            // Remove a luz do mesh e da cena
+            mesh.remove(light);
+            this.scene.remove(light);
+    
+            // Tenta liberar a memória da luz
+            if (light.dispose) light.dispose();
+        }
+    
+        // Remove o mesh do item da cena
         this.scene.remove(mesh);
+    
+        // Remove o item da lista interna de items
         this.items = this.items.filter(item => item.mesh !== mesh);
     }
+    
+    
 
     getCollidingItem(playerBox) {
         for (const { mesh, type } of this.items) {
             const center = mesh.position.clone();
             const size = new THREE.Vector3();
-    
+
             if (type === ITEM_TYPES.COIN) {
-                size.set(0.8, 0.8, 0.8); // bounding box mais larga na horizontal
+                size.set(0.8, 0.8, 0.8);
             } else if (type === ITEM_TYPES.LIGHTNING || type === ITEM_TYPES.STAR) {
                 size.set(1.0, 1.2, 1.0);
             }
-    
+
             const itemBox = new THREE.Box3().setFromCenterAndSize(center, size);
-    
+
             if (playerBox.intersectsBox(itemBox)) {
                 return { mesh, type };
             }
         }
         return null;
     }
-    
-} 
+}
