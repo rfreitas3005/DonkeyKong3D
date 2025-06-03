@@ -903,6 +903,22 @@ export class Player {
     }
 
     handleLadderMovement(previousPosition) {
+        // Troca automática para perspectiva ao subir escada
+        if (this.currentCamera === '2d') {
+            // Salva o estado anterior para restaurar depois
+            this._autoCameraRestore = true;
+            this.currentCamera = 'perspective';
+            // Restaurar câmera perspectiva
+            if (this.lastPerspectivePosition) {
+                this.camera.position.copy(this.lastPerspectivePosition.position);
+                this.camera.rotation.copy(this.lastPerspectivePosition.rotation);
+                this.camera.fov = this.lastPerspectivePosition.fov;
+                this.camera.updateProjectionMatrix();
+            }
+            if (this.scene.parent) {
+                this.scene.parent.camera = this.camera;
+            }
+        }
         // Disable gravity while on ladder
         this.velocity.y = 0;
         this.isJumping = false;
@@ -1020,6 +1036,27 @@ export class Player {
                 
                 if (this.animations['idle2']) {
                     this.playAnimation('idle2');
+                }
+            }
+        }
+
+        // Ao sair da escada, se foi troca automática, volta para 2D
+        if (!this.onLadder && this._autoCameraRestore) {
+            this._autoCameraRestore = false;
+            this.currentCamera = '2d';
+            // Atualiza a câmera ortográfica para cima do player
+            if (this.orthographicCamera) {
+                this.orthographicCamera.position.set(
+                    this.mesh.position.x,
+                    150,
+                    this.mesh.position.z
+                );
+                this.orthographicCamera.rotation.x = -Math.PI / 2;
+                this.orthographicCamera.rotation.y = 0;
+                this.orthographicCamera.rotation.z = 0;
+                this.orthographicCamera.updateProjectionMatrix();
+                if (this.scene.parent) {
+                    this.scene.parent.camera = this.orthographicCamera;
                 }
             }
         }
