@@ -1152,10 +1152,26 @@ export class Player {
     }
 
     reset() {
-        // Reset position
+        // Clean up existing mesh if it exists
         if (this.mesh) {
-            this.mesh.position.set(0, 0, 0);
-            this.mesh.rotation.set(0, 0, 0);
+            if (this.mesh.parent) {
+                this.mesh.parent.remove(this.mesh);
+            }
+            if (this.mesh.geometry) this.mesh.geometry.dispose();
+            if (this.mesh.material) {
+                if (Array.isArray(this.mesh.material)) {
+                    this.mesh.material.forEach(m => m.dispose());
+                } else {
+                    this.mesh.material.dispose();
+                }
+            }
+            this.mesh = null;
+        }
+
+        // Reset position
+        if (this.tempMesh) {
+            this.tempMesh.position.set(0, 1.25, this.floorLength * 0.95);
+            this.tempMesh.rotation.set(0, 0, 0);
         }
         
         // Reset movement state
@@ -1164,10 +1180,11 @@ export class Player {
         this.isGrounded = false;
         this.isFalling = false;
         this.isClimbing = false;
+        this.currentFloor = 0;
         
         // Reset animation
-        if (this.animations['idle']) {
-            this.playAnimation('idle');
+        if (this.mixer) {
+            this.mixer.stopAllAction();
         }
         
         // Reset camera position
@@ -1175,6 +1192,10 @@ export class Player {
             this.camera.position.set(0, 5, 10);
             this.camera.lookAt(0, 0, 0);
         }
+
+        // Reload the character model
+        this.isLoaded = false;
+        this.loadCharacterModel();
     }
 
     toggle2DCamera() {

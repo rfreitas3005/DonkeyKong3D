@@ -607,7 +607,16 @@ export class Game {
         } else {
             // Clear existing objects
             while(this.scene.children.length > 0) { 
-                this.scene.remove(this.scene.children[0]); 
+                const child = this.scene.children[0];
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(m => m.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+                this.scene.remove(child); 
             }
             
             // Reset and recreate level and player
@@ -1109,6 +1118,10 @@ export class Game {
                         });
                     }
                 });
+            }
+            // Força uma atualização do renderer para garantir que as luzes sejam aplicadas
+            if (this.renderer && this.scene && this.camera) {
+                this.renderer.render(this.scene, this.camera);
             }
             this._allLightsOff = false;
         }
