@@ -82,6 +82,11 @@ export class Game {
                 this.toggleLights();
             }
 
+            // Desligar/ligar todas as luzes com L
+            if (e.key.toLowerCase() === 'l') {
+                this.toggleAllLights();
+            }
+
             // Mod menu navigation
             if (this.modMenuVisible) {
                 switch (e.key) {
@@ -1030,13 +1035,20 @@ export class Game {
     }
 
     toggleLights() {
-        // Alterna entre modo normal e modo "todas as luzes desligadas"
+        // Alterna entre modo normal e modo "todas as luzes desligadas exceto power-ups"
         if (!this._lightsOff) {
-            // Remove todas as luzes
-            this._originalLights = this.scene.children.filter(obj => obj.isLight);
-            this._originalLights.forEach(light => this.scene.remove(light));
-            // Adiciona uma ambient light fraca para não ficar tudo escuro
-            this._dimLight = new THREE.AmbientLight(0xffffff, 0.12);
+            // Remove todas as luzes exceto as point lights dos power-ups
+            this._originalLights = this.scene.children.filter(obj => 
+                obj.isLight && !(obj.type === 'PointLight' && obj.name === 'itemLight')
+            );
+            this._originalLights.forEach(light => {
+                this.scene.remove(light);
+                if (light.target) {
+                    this.scene.remove(light.target);
+                }
+            });
+            // Adiciona uma ambient light muito fraca para ficar bem escuro
+            this._dimLight = new THREE.AmbientLight(0xffffff, 0.05);
             this.scene.add(this._dimLight);
             this._lightsOff = true;
         } else {
@@ -1047,9 +1059,58 @@ export class Game {
             }
             // Restaura as luzes originais
             if (this._originalLights) {
-                this._originalLights.forEach(light => this.scene.add(light));
+                this._originalLights.forEach(light => {
+                    this.scene.add(light);
+                    if (light.target) {
+                        this.scene.add(light.target);
+                    }
+                });
             }
             this._lightsOff = false;
+        }
+    }
+
+    toggleAllLights() {
+        // Alterna entre modo normal e modo "todas as luzes desligadas"
+        if (!this._allLightsOff) {
+            // Remove todas as luzes
+            this._originalAllLights = this.scene.children.filter(obj => obj.isLight || (obj.children && obj.children.some(child => child.isLight)));
+            this._originalAllLights.forEach(light => {
+                if (light.isLight) {
+                    this.scene.remove(light);
+                } else if (light.children) {
+                    light.children.forEach(child => {
+                        if (child.isLight) {
+                            light.remove(child);
+                        }
+                    });
+                }
+            });
+            // Adiciona uma ambient light fraca para não ficar tudo escuro
+            this._dimAllLight = new THREE.AmbientLight(0xffffff, 0.05);
+            this.scene.add(this._dimAllLight);
+            this._allLightsOff = true;
+        } else {
+            // Remove a ambient light fraca
+            if (this._dimAllLight) {
+                this.scene.remove(this._dimAllLight);
+                this._dimAllLight = null;
+            }
+            // Restaura as luzes originais
+            if (this._originalAllLights) {
+                this._originalAllLights.forEach(light => {
+                    if (light.isLight) {
+                        this.scene.add(light);
+                    } else if (light.children) {
+                        light.children.forEach(child => {
+                            if (child.isLight) {
+                                light.add(child);
+                            }
+                        });
+                    }
+                });
+            }
+            this._allLightsOff = false;
         }
     }
 

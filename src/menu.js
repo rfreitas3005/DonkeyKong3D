@@ -479,7 +479,8 @@ export class GameMenu {
                 <div style="color: #FFD700; font-size: 20px; text-align: left; margin-bottom: 2rem; font-family: 'Press Start 2P', monospace; line-height: 2.2; letter-spacing: 1px;">
                     <b>W, A, S, D / Setas</b>: Mover<br>
                     <b>Espaço</b>: Saltar<br>
-                    <b>J</b>: Alternar luzes<br>
+                    <b>J</b>: Alternar luz do sol<br>
+                    <b>L</b>: Alternar todas as luzes<br>
                     <b>V</b>: Alternar câmara 2D/3D<br>
                     <b>Insert</b>: Mod Menu<br>
                     <b>P</b>: Pausa<br>
