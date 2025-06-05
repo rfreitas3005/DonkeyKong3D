@@ -355,6 +355,12 @@ export class Game {
                     localStorage.setItem('highScore', currentScore);
                 }
                 localStorage.setItem('lastScore', currentScore);
+                // Salvar no leaderboard
+                const playerName = localStorage.getItem('playerName') || 'PLAYER';
+                let leaderboard = JSON.parse(localStorage.getItem('leaderboard') || '[]');
+                leaderboard.push({ name: playerName, score: currentScore });
+                leaderboard = leaderboard.sort((a, b) => b.score - a.score).slice(0, 10);
+                localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
                 this.gameOverScreen.show(currentScore, Math.max(currentScore, savedHighScore));
                 this.isRunning = false;
             }, 1300); // Wait for 1.3 seconds before showing game over
@@ -1038,6 +1044,12 @@ export class Game {
                 localStorage.setItem('highScore', currentScore);
             }
             localStorage.setItem('lastScore', currentScore);
+            // Salvar no leaderboard
+            const playerName = localStorage.getItem('playerName') || 'PLAYER';
+            let leaderboard = JSON.parse(localStorage.getItem('leaderboard') || '[]');
+            leaderboard.push({ name: playerName, score: currentScore });
+            leaderboard = leaderboard.sort((a, b) => b.score - a.score).slice(0, 10);
+            localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
             this.gameWonScreen.show(currentScore, Math.max(currentScore, savedHighScore));
             this.isRunning = false;
         }, 1000);

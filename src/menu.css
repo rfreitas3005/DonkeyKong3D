@@ -436,4 +436,75 @@ input[type="range"]::-webkit-slider-thumb {
     }
 }
 
-/* Tela de vitória (Game Won) reutiliza estilos de .game-over-title, .game-message, .final-score, .hi-score, .menu-item, etc. */ 
+/* Tela de vitória (Game Won) reutiliza estilos de .game-over-title, .game-message, .final-score, .hi-score, .menu-item, etc. */
+
+.name-overlay, .leaderboard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.name-overlay input[type="text"] {
+    font-size: 2rem;
+    padding: 0.5rem;
+    text-align: center;
+    font-family: 'Press Start 2P', monospace;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    border: 2px solid #FFD700;
+    background: #222;
+    color: #FFD700;
+    outline: none;
+}
+
+.name-overlay button,
+.leaderboard-overlay button {
+    font-size: 1.5rem;
+    padding: 0.5rem 2rem;
+    font-family: 'Press Start 2P', monospace;
+    background: #FFD700;
+    color: #000;
+    border: none;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.2s;
+    margin-top: 1rem;
+}
+
+.name-overlay button:hover,
+.leaderboard-overlay button:hover {
+    background: #fff;
+}
+
+.leaderboard-overlay table {
+    background: rgba(0,0,0,0.7);
+    border-radius: 10px;
+    padding: 2rem;
+    color: #FFD700;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+    border-collapse: collapse;
+}
+
+.leaderboard-overlay th, .leaderboard-overlay td {
+    padding: 0.5rem 2rem;
+    text-align: center;
+}
+
+.leaderboard-overlay th {
+    font-size: 1.3rem;
+    border-bottom: 2px solid #FFD700;
+}
+
+.leaderboard-overlay tr:nth-child(even) {
+    background: rgba(255,255,255,0.03);
+} 

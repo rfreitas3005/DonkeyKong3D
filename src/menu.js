@@ -106,7 +106,8 @@ export class GameMenu {
         
         // Create menu items
         const menuItems = [
-            { text: 'PLAY', action: () => this.startGame() },
+            { text: 'PLAY', action: () => this.promptPlayerName() },
+            { text: 'LEADERBOARD', action: () => this.showLeaderboard() },
             { text: 'CONTROLS', action: () => this.showControls() },
             { text: 'OPTIONS', action: () => this.showOptions() },
             { text: 'CREDITS', action: () => this.showCredits() }
@@ -501,6 +502,145 @@ export class GameMenu {
         } else {
             this.controlsPanel.style.display = 'flex';
         }
+    }
+
+    promptPlayerName() {
+        // Cria overlay para input de nome
+        const overlay = document.createElement('div');
+        overlay.className = 'name-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = 0;
+        overlay.style.left = 0;
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = 'rgba(0,0,0,0.8)';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.zIndex = 9999;
+
+        const label = document.createElement('label');
+        label.textContent = 'ENTER YOUR NAME:';
+        label.style.color = '#FFD700';
+        label.style.fontFamily = 'Press Start 2P, monospace';
+        label.style.fontSize = '2rem';
+        label.style.marginBottom = '1rem';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = 12;
+        input.style.fontSize = '2rem';
+        input.style.padding = '0.5rem';
+        input.style.textAlign = 'center';
+        input.style.fontFamily = 'Press Start 2P, monospace';
+        input.style.marginBottom = '1rem';
+        input.autofocus = true;
+
+        const startBtn = document.createElement('button');
+        startBtn.textContent = 'START!';
+        startBtn.style.fontSize = '2rem';
+        startBtn.style.padding = '0.5rem 2rem';
+        startBtn.style.fontFamily = 'Press Start 2P, monospace';
+        startBtn.style.background = '#FFD700';
+        startBtn.style.color = '#000';
+        startBtn.style.border = 'none';
+        startBtn.style.cursor = 'pointer';
+        startBtn.style.borderRadius = '8px';
+        startBtn.style.transition = 'background 0.2s';
+        startBtn.addEventListener('mouseover', () => startBtn.style.background = '#fff');
+        startBtn.addEventListener('mouseout', () => startBtn.style.background = '#FFD700');
+
+        startBtn.onclick = () => {
+            const name = input.value.trim() || 'PLAYER';
+            localStorage.setItem('playerName', name);
+            overlay.remove();
+            this.startGame();
+        };
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') startBtn.click();
+        });
+
+        overlay.appendChild(label);
+        overlay.appendChild(input);
+        overlay.appendChild(startBtn);
+        document.body.appendChild(overlay);
+        input.focus();
+    }
+
+    showLeaderboard() {
+        // Cria overlay para leaderboard
+        const overlay = document.createElement('div');
+        overlay.className = 'leaderboard-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = 0;
+        overlay.style.left = 0;
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = 'rgba(0,0,0,0.95)';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.zIndex = 9999;
+
+        const title = document.createElement('div');
+        title.textContent = 'LEADERBOARD';
+        title.style.color = '#FFD700';
+        title.style.fontFamily = 'Press Start 2P, monospace';
+        title.style.fontSize = '2.5rem';
+        title.style.marginBottom = '2rem';
+
+        // Tabela de scores
+        const table = document.createElement('table');
+        table.style.background = 'rgba(0,0,0,0.7)';
+        table.style.borderRadius = '10px';
+        table.style.padding = '2rem';
+        table.style.color = '#FFD700';
+        table.style.fontFamily = 'Press Start 2P, monospace';
+        table.style.fontSize = '1.2rem';
+        table.style.marginBottom = '2rem';
+        table.style.borderCollapse = 'collapse';
+
+        // Header
+        const header = document.createElement('tr');
+        header.innerHTML = '<th style="padding: 0.5rem 2rem;">NAME</th><th style="padding: 0.5rem 2rem;">SCORE</th>';
+        table.appendChild(header);
+
+        // Scores do localStorage
+        let scores = JSON.parse(localStorage.getItem('leaderboard') || '[]');
+        scores = scores.sort((a, b) => b.score - a.score).slice(0, 10);
+        scores.forEach(({ name, score }) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td style="padding: 0.5rem 2rem; text-align:center;">${name}</td><td style="padding: 0.5rem 2rem; text-align:center;">${score}</td>`;
+            table.appendChild(row);
+        });
+        if (scores.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="2" style="text-align:center; padding: 1rem;">No scores yet</td>';
+            table.appendChild(row);
+        }
+
+        // Botão de fechar
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'CLOSE';
+        closeBtn.style.fontSize = '1.5rem';
+        closeBtn.style.padding = '0.5rem 2rem';
+        closeBtn.style.fontFamily = 'Press Start 2P, monospace';
+        closeBtn.style.background = '#FFD700';
+        closeBtn.style.color = '#000';
+        closeBtn.style.border = 'none';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.borderRadius = '8px';
+        closeBtn.style.transition = 'background 0.2s';
+        closeBtn.addEventListener('mouseover', () => closeBtn.style.background = '#fff');
+        closeBtn.addEventListener('mouseout', () => closeBtn.style.background = '#FFD700');
+        closeBtn.onclick = () => overlay.remove();
+
+        overlay.appendChild(title);
+        overlay.appendChild(table);
+        overlay.appendChild(closeBtn);
+        document.body.appendChild(overlay);
     }
 
     dispose() {
